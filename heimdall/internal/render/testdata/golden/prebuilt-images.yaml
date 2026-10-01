@@ -1,0 +1,713 @@
+# namespace: heimdall-pr184-shopflow-x7d2
+# url: web https://pr184-shopflow-x7d2.preview.example.com (primary: true)
+# stage: guardrails, step: setup
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  annotations:
+    heimdall.dev/expires-at: "2026-10-03T12:00:00Z"
+    heimdall.dev/repo: acme/shopflow
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+    heimdall.dev/url: https://pr184-shopflow-x7d2.preview.example.com
+    heimdall.dev/visibility: private
+  labels:
+    app.kubernetes.io/component: guardrail
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/preview: "true"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: guardrails
+    heimdall.dev/tenant: acme
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+  name: heimdall-pr184-shopflow-x7d2
+spec: {}
+---
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: guardrail
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: guardrails
+    heimdall.dev/tenant: acme
+  name: heimdall-workload
+  namespace: heimdall-pr184-shopflow-x7d2
+---
+apiVersion: v1
+data:
+  redis-password: UmVkaXMwMDAwMDAwMDAwMDAwMDAwMDAw
+  redis-url: cmVkaXM6Ly86UmVkaXMwMDAwMDAwMDAwMDAwMDAwMDAwQHJlZGlzOjYzNzkvMA==
+kind: Secret
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: guardrail
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: guardrails
+    heimdall.dev/tenant: acme
+  name: heimdall-credentials
+  namespace: heimdall-pr184-shopflow-x7d2
+type: Opaque
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: guardrail
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: guardrails
+    heimdall.dev/tenant: acme
+  name: heimdall-quota
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  hard:
+    limits.cpu: "6"
+    limits.memory: 12Gi
+    persistentvolumeclaims: "0"
+    pods: "49"
+    requests.storage: "0"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: guardrail
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: guardrails
+    heimdall.dev/tenant: acme
+  name: heimdall-limits
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  limits:
+  - default:
+      cpu: 500m
+      memory: 512Mi
+    defaultRequest:
+      cpu: 100m
+      memory: 256Mi
+    max:
+      cpu: "2"
+      memory: 4Gi
+    maxLimitRequestRatio:
+      memory: "2"
+    type: Container
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: guardrail
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: guardrails
+    heimdall.dev/tenant: acme
+  name: heimdall-allow-dns
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  podSelector: {}
+  policyTypes:
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: guardrail
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: guardrails
+    heimdall.dev/tenant: acme
+  name: heimdall-allow-gateway-web
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: heimdall-gateway
+    ports:
+    - port: 80
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: guardrail
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: guardrails
+    heimdall.dev/tenant: acme
+  name: heimdall-allow-same-namespace
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  egress:
+  - to:
+    - podSelector: {}
+  ingress:
+  - from:
+    - podSelector: {}
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: guardrail
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: guardrails
+    heimdall.dev/tenant: acme
+  name: heimdall-default-deny
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+# stage: dependencies, step: start
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: dependencies
+    heimdall.dev/tenant: acme
+  name: redis
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  ports:
+  - name: redis
+    port: 6379
+    protocol: TCP
+    targetPort: redis
+  selector:
+    app.kubernetes.io/name: redis
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: dependencies
+    heimdall.dev/tenant: acme
+  name: redis
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: cache
+        app.kubernetes.io/instance: env-0f8b2c
+        app.kubernetes.io/managed-by: heimdall
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/part-of: shopflow
+        heimdall.dev/env: env-0f8b2c
+        heimdall.dev/owner: octocat
+        heimdall.dev/pr: "184"
+        heimdall.dev/repo: acme.shopflow
+        heimdall.dev/tenant: acme
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - redis-server
+        - --requirepass
+        - $(REDIS_PASSWORD)
+        - --save
+        - ""
+        - --appendonly
+        - "no"
+        - --maxmemory
+        - 96mb
+        - --maxmemory-policy
+        - allkeys-lru
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: redis-password
+              name: heimdall-credentials
+        image: public.ecr.aws/docker/library/redis:6.2.24-alpine@sha256:b362b5dff9d14d961dc3352db4776aba6a8c53ca2661d7c74ad2c121f82cdaea
+        imagePullPolicy: IfNotPresent
+        name: redis
+        ports:
+        - containerPort: 6379
+          name: redis
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 6
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          tcpSocket:
+            port: redis
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 20m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /data
+          name: data
+        - mountPath: /tmp
+          name: tmp
+      enableServiceLinks: false
+      restartPolicy: Always
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 999
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: heimdall-workload
+      volumes:
+      - emptyDir:
+          sizeLimit: 64Mi
+        name: data
+      - emptyDir:
+          sizeLimit: 256Mi
+        name: tmp
+# stage: baseline-db (nothing to do for this configuration)
+# stage: application, step: wave-1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: service
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: application
+    heimdall.dev/tenant: acme
+  name: web
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: http
+  selector:
+    app.kubernetes.io/name: web
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: application
+    heimdall.dev/tenant: acme
+  name: sync
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sync
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/instance: env-0f8b2c
+        app.kubernetes.io/managed-by: heimdall
+        app.kubernetes.io/name: sync
+        app.kubernetes.io/part-of: shopflow
+        heimdall.dev/env: env-0f8b2c
+        heimdall.dev/owner: octocat
+        heimdall.dev/pr: "184"
+        heimdall.dev/repo: acme.shopflow
+        heimdall.dev/tenant: acme
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - sh
+        - -c
+        - ./sync --loop
+        env:
+        - name: HEIMDALL_PR
+          value: "184"
+        - name: HEIMDALL_SHA
+          value: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+        - name: HEIMDALL_PUBLIC_URL
+          value: https://pr184-shopflow-x7d2.preview.example.com
+        - name: HEIMDALL_PUBLIC_URL_WEB
+          value: https://pr184-shopflow-x7d2.preview.example.com
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              key: redis-url
+              name: heimdall-credentials
+        image: ghcr.io/acme/sync@sha256:75c75efe327a8ef35a072f25117961f5b99e35035dc9bd86493dd29fd7bc07eb
+        imagePullPolicy: IfNotPresent
+        name: sync
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      enableServiceLinks: false
+      restartPolicy: Always
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: heimdall-workload
+      volumes:
+      - emptyDir:
+          sizeLimit: 256Mi
+        name: tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+  labels:
+    app.kubernetes.io/component: service
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: application
+    heimdall.dev/tenant: acme
+  name: web
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: service
+        app.kubernetes.io/instance: env-0f8b2c
+        app.kubernetes.io/managed-by: heimdall
+        app.kubernetes.io/name: web
+        app.kubernetes.io/part-of: shopflow
+        heimdall.dev/env: env-0f8b2c
+        heimdall.dev/owner: octocat
+        heimdall.dev/pr: "184"
+        heimdall.dev/repo: acme.shopflow
+        heimdall.dev/tenant: acme
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - env:
+        - name: PORT
+          value: "80"
+        - name: HEIMDALL_PR
+          value: "184"
+        - name: HEIMDALL_SHA
+          value: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+        - name: HEIMDALL_PUBLIC_URL
+          value: https://pr184-shopflow-x7d2.preview.example.com
+        - name: HEIMDALL_PUBLIC_URL_WEB
+          value: https://pr184-shopflow-x7d2.preview.example.com
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              key: redis-url
+              name: heimdall-credentials
+        image: ghcr.io/acme/storefront:2.4.1@sha256:1111111111111111111111111111111111111111111111111111111111111111
+        imagePullPolicy: IfNotPresent
+        name: web
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      enableServiceLinks: false
+      restartPolicy: Always
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: heimdall-workload
+      volumes:
+      - emptyDir:
+          sizeLimit: 256Mi
+        name: tmp
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  annotations:
+    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
+    heimdall.dev/url: https://pr184-shopflow-x7d2.preview.example.com
+    heimdall.dev/visibility: private
+  labels:
+    app.kubernetes.io/component: route
+    app.kubernetes.io/instance: env-0f8b2c
+    app.kubernetes.io/managed-by: heimdall
+    app.kubernetes.io/part-of: shopflow
+    heimdall.dev/env: env-0f8b2c
+    heimdall.dev/expires: "1791028800"
+    heimdall.dev/generation: "3"
+    heimdall.dev/owner: octocat
+    heimdall.dev/pr: "184"
+    heimdall.dev/repo: acme.shopflow
+    heimdall.dev/stage: application
+    heimdall.dev/tenant: acme
+  name: web
+  namespace: heimdall-pr184-shopflow-x7d2
+spec:
+  hostnames:
+  - pr184-shopflow-x7d2.preview.example.com
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: heimdall
+    namespace: heimdall-gateway
+  rules:
+  - backendRefs:
+    - name: web
+      port: 80
+# stage: smoke (nothing to do for this configuration)

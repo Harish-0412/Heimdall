@@ -1,0 +1,33 @@
+# The shared preview Gateway, as the platform operator sets it up once per
+# cluster (ADR 0008). Previews attach HTTPRoutes to it; only namespaces
+# labelled heimdall.dev/preview=true may. In production the listener is HTTPS
+# with the cluster's single wildcard certificate:
+#
+#   - name: https
+#     protocol: HTTPS
+#     port: 443
+#     hostname: "*.preview.example.com"
+#     tls: {certificateRefs: [{name: preview-wildcard-tls}]}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: heimdall-gateway
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: heimdall
+  namespace: heimdall-gateway
+spec:
+  gatewayClassName: nginx
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: "*.localtest.me"
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              heimdall.dev/preview: "true"

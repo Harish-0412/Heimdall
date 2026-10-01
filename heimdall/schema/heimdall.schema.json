@@ -1,0 +1,543 @@
+{
+  "$id": "https://raw.githubusercontent.com/heimdall-dev/heimdall/main/schema/heimdall.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "definitions": {
+    "Build": {
+      "additionalProperties": false,
+      "description": "How to build the image from the repository.",
+      "properties": {
+        "args": {
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "Build arguments. Never put secrets here: they end up in the image history.",
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "context": {
+          "description": "Docker build context, relative to the repository root. Default: \".\".",
+          "type": "string"
+        },
+        "dockerfile": {
+          "description": "Dockerfile path, relative to the context. Default: Dockerfile.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Dependencies": {
+      "additionalProperties": false,
+      "description": "Managed backing services. Presence enables one; use {} for defaults.",
+      "properties": {
+        "postgres": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Postgres"
+            }
+          ],
+          "description": "PostgreSQL, one per environment."
+        },
+        "rabbitmq": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/RabbitMQ"
+            }
+          ],
+          "description": "RabbitMQ, one per environment."
+        },
+        "redis": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Redis"
+            }
+          ],
+          "description": "Redis, one per environment."
+        }
+      },
+      "type": "object"
+    },
+    "Health": {
+      "additionalProperties": false,
+      "description": "HTTP readiness probe.",
+      "properties": {
+        "initialDelay": {
+          "description": "Wait before the first probe; at most 300s. Default: 5s.",
+          "pattern": "^([0-9]+d|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+          "type": "string"
+        },
+        "path": {
+          "description": "HTTP path probed for readiness, for example /health.",
+          "pattern": "^/\\S*$",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Migrations": {
+      "additionalProperties": false,
+      "description": "Schema migrations, run as a Job before services start.",
+      "properties": {
+        "command": {
+          "description": "Migration command, run through sh -c.",
+          "type": "string"
+        },
+        "service": {
+          "description": "Service whose image contains the migration tool.",
+          "type": "string"
+        },
+        "timeout": {
+          "description": "At most 30m. Default: 5m.",
+          "pattern": "^([0-9]+d|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "command"
+      ],
+      "type": "object"
+    },
+    "Postgres": {
+      "additionalProperties": false,
+      "description": "Per-environment PostgreSQL.",
+      "properties": {
+        "seed": {
+          "description": "A .sql file, relative to the repository root, loaded after migrations. Reset restores this baseline.",
+          "pattern": "\\.[sS][qQ][lL]$",
+          "type": "string"
+        },
+        "storage": {
+          "description": "Volume size, for example \"2Gi\". Default: 1Gi.",
+          "pattern": "^[0-9]+(Mi|Gi)$",
+          "type": "string"
+        },
+        "version": {
+          "description": "Major version. Default: \"16\".",
+          "enum": [
+            "14",
+            "15",
+            "16",
+            "17",
+            14,
+            15,
+            16,
+            17
+          ],
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Preview": {
+      "additionalProperties": false,
+      "description": "Environment lifecycle and access.",
+      "properties": {
+        "sleepAfter": {
+          "description": "Scale to zero after this much inactivity: at least 10m, and shorter than ttl.",
+          "pattern": "^([0-9]+d|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+          "type": "string"
+        },
+        "ttl": {
+          "description": "How long the environment lives, for example 48h or 2d. Default: 48h.",
+          "pattern": "^([0-9]+d|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+          "type": "string"
+        },
+        "visibility": {
+          "description": "Who may open the preview: private (default), org or public.",
+          "enum": [
+            "private",
+            "org",
+            "public"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "RabbitMQ": {
+      "additionalProperties": false,
+      "description": "Per-environment RabbitMQ.",
+      "properties": {
+        "version": {
+          "description": "Version. Default: \"3.13\".",
+          "enum": [
+            "3.12",
+            "3.13",
+            3.12,
+            3.13
+          ],
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Redis": {
+      "additionalProperties": false,
+      "description": "Per-environment Redis.",
+      "properties": {
+        "version": {
+          "description": "Major version. Default: \"7\".",
+          "enum": [
+            "6",
+            "7",
+            6,
+            7
+          ],
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Requests": {
+      "additionalProperties": false,
+      "description": "Scheduler reservations.",
+      "properties": {
+        "cpu": {
+          "description": "CPU request; at most the CPU limit.",
+          "pattern": "^([0-9]+m|[0-9]*\\.?[0-9]+)$",
+          "type": "string"
+        },
+        "memory": {
+          "description": "Memory request; at most the memory limit, and at least half of it by default policy.",
+          "pattern": "^[0-9]+(Mi|Gi)$",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Resources": {
+      "additionalProperties": false,
+      "dependencies": {
+        "size": {
+          "properties": {
+            "cpu": false,
+            "memory": false,
+            "requests": false
+          }
+        }
+      },
+      "description": "Container resources: a size preset, or explicit limits with optional requests.",
+      "properties": {
+        "cpu": {
+          "description": "CPU limit: cores (\"1\", \"0.5\") or millicores (\"250m\").",
+          "pattern": "^([0-9]+m|[0-9]*\\.?[0-9]+)$",
+          "type": "string"
+        },
+        "memory": {
+          "description": "Memory limit in binary units, for example \"512Mi\" or \"1Gi\".",
+          "pattern": "^[0-9]+(Mi|Gi)$",
+          "type": "string"
+        },
+        "requests": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Requests"
+            }
+          ],
+          "description": "Scheduler reservations. Default: CPU 20% of the limit; memory 50% of the limit, at least 64Mi."
+        },
+        "size": {
+          "description": "Preset limits: small (250m, 256Mi), medium (500m, 512Mi) or large (1 CPU, 2Gi; needs approval). Not combinable with cpu, memory or requests.",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Service": {
+      "additionalProperties": false,
+      "description": "A long-running workload that listens on a port.",
+      "oneOf": [
+        {
+          "required": [
+            "build"
+          ]
+        },
+        {
+          "required": [
+            "image"
+          ]
+        }
+      ],
+      "properties": {
+        "build": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Build"
+            }
+          ],
+          "description": "Build the image from the repository. Exactly one of build or image is required."
+        },
+        "dependsOn": {
+          "description": "Services and enabled dependencies that must be ready first.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "Plain, non-secret environment variables. HEIMDALL_* and injected names (PORT, DATABASE_URL, REDIS_URL, AMQP_URL) are reserved.",
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "health": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Health"
+            }
+          ],
+          "description": "HTTP readiness probe. Without it, a TCP probe on the port is used."
+        },
+        "image": {
+          "description": "Prebuilt image reference, from a registry your organisation allows.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\-/:@]{0,254}$",
+          "type": "string"
+        },
+        "port": {
+          "description": "Port the process listens on; also injected as PORT.",
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "primary": {
+          "description": "Owns the bare preview URL. Required when several services are public.",
+          "type": "boolean"
+        },
+        "public": {
+          "description": "Expose the service through a preview URL.",
+          "type": "boolean"
+        },
+        "resources": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Resources"
+            }
+          ],
+          "description": "Container resources. Default: medium for services, small for workers."
+        },
+        "secrets": {
+          "description": "Names of secrets stored in Heimdall, injected as environment variables (UPPER_SNAKE_CASE).",
+          "items": {
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "port"
+      ],
+      "type": "object"
+    },
+    "SmokeTest": {
+      "additionalProperties": false,
+      "description": "A command run inside the environment once it is ready.",
+      "properties": {
+        "command": {
+          "description": "Command run through sh -c in a toolbox image with curl; service names resolve as hostnames.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Short name for the PR report.",
+          "pattern": "^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$",
+          "type": "string"
+        },
+        "timeout": {
+          "description": "At most 10m. Default: 2m.",
+          "pattern": "^([0-9]+d|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "command"
+      ],
+      "type": "object"
+    },
+    "Worker": {
+      "additionalProperties": false,
+      "description": "A long-running workload without a port (queue consumer, loop).",
+      "oneOf": [
+        {
+          "required": [
+            "build"
+          ]
+        },
+        {
+          "required": [
+            "image"
+          ]
+        }
+      ],
+      "properties": {
+        "build": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Build"
+            }
+          ],
+          "description": "Build the image from the repository. Exactly one of build or image is required."
+        },
+        "command": {
+          "description": "Command, run through sh -c.",
+          "type": "string"
+        },
+        "dependsOn": {
+          "description": "Services and enabled dependencies that must be ready first.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "Plain, non-secret environment variables. HEIMDALL_* and injected names (PORT, DATABASE_URL, REDIS_URL, AMQP_URL) are reserved.",
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "image": {
+          "description": "Prebuilt image reference, from a registry your organisation allows.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\-/:@]{0,254}$",
+          "type": "string"
+        },
+        "replicas": {
+          "description": "Number of replicas, 1-5. Default: 1.",
+          "maximum": 5,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "resources": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Resources"
+            }
+          ],
+          "description": "Container resources. Default: medium for services, small for workers."
+        },
+        "secrets": {
+          "description": "Names of secrets stored in Heimdall, injected as environment variables (UPPER_SNAKE_CASE).",
+          "items": {
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Heimdall preview environment configuration (heimdall.yaml).",
+  "properties": {
+    "dependencies": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Dependencies"
+        }
+      ],
+      "description": "Managed backing services: postgres, redis, rabbitmq."
+    },
+    "migrations": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Migrations"
+        }
+      ],
+      "description": "Schema migrations, run against the baseline database before services start."
+    },
+    "preview": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Preview"
+        }
+      ],
+      "description": "Lifecycle and access."
+    },
+    "services": {
+      "additionalProperties": {
+        "$ref": "#/definitions/Service"
+      },
+      "description": "Long-running network workloads, keyed by name. At least one is required.",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$",
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "smokeTests": {
+      "description": "Commands run inside the environment once everything is ready (at most 10).",
+      "items": {
+        "$ref": "#/definitions/SmokeTest"
+      },
+      "maxItems": 10,
+      "type": "array"
+    },
+    "version": {
+      "const": 1,
+      "description": "Schema version. Must be 1.",
+      "type": "integer"
+    },
+    "workers": {
+      "additionalProperties": {
+        "$ref": "#/definitions/Worker"
+      },
+      "description": "Long-running workloads without a port, keyed by name.",
+      "propertyNames": {
+        "pattern": "^[a-z]([a-z0-9-]{0,38}[a-z0-9])?$",
+        "type": "string"
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "services"
+  ],
+  "title": "heimdall.yaml",
+  "type": "object"
+}

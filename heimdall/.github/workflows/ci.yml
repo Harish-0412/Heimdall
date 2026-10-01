@@ -1,0 +1,83 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go mod verify
+      - run: go vet ./...
+      # Includes golden files, the security-defaults test, the property test,
+      # fuzz seed corpora, and the schema drift check.
+      - run: go test -race -coverprofile=coverage.out ./...
+      - name: Validate example configs
+        run: go run ./cmd/heimdall validate --strict examples/shopflow/heimdall.yaml
+      - name: Generated files are up to date
+        run: |
+          go test ./internal/config -run Schema -update
+          go test ./internal/render -run Golden -update
+          git diff --exit-code -- schema internal/render/testdata
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+
+  manifests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@v4
+      - run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0
+      - run: make helm-lint kubeconform
+
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make fuzz
+
+  # Phase 1 exit criterion: ShopFlow reaches Ready on kind from rendered output.
+  e2e-kind:
+    needs: [test, manifests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@v4
+      - run: go install sigs.k8s.io/kind@v0.33.0
+      - run: make e2e-kind

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ShopFlow</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; }
+    header { display: flex; justify-content: space-between; align-items: baseline; }
+    .badge { font-size: .8rem; background: #eef; border-radius: .5rem; padding: .2rem .5rem; }
+    li { display: flex; justify-content: space-between; padding: .5rem 0; border-bottom: 1px solid #eee; }
+    button { cursor: pointer; }
+  </style>
+  <script src="/config.js"></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>ShopFlow</h1>
+    <span class="badge" id="preview"></span>
+  </header>
+  <ul id="products"><li>Loading products…</li></ul>
+  <p id="status" role="status"></p>
+</body>
+</html>

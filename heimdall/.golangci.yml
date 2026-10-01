@@ -1,0 +1,19 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - misspell
+    - unconvert
+    - gocritic
+  exclusions:
+    # Unchecked fmt.Fprint* to stdout/stderr and Close on read-only files:
+    # errors there are either unactionable or already surfaced elsewhere.
+    presets:
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

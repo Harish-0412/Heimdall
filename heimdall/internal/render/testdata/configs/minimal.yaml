@@ -1,0 +1,8 @@
+# The smallest useful preview: one public service, no dependencies.
+version: 1
+services:
+  app:
+    build: {context: .}
+    port: 8080
+    public: true
+    health: {path: /healthz}

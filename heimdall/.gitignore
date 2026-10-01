@@ -1,0 +1,15 @@
+/bin/
+/dist/
+/out/
+node_modules/
+*.test
+*.out
+coverage.*
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+*.kubeconfig
+.terraform/
+*.tfstate*

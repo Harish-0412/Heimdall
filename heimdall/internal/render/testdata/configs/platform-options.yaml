@@ -1,0 +1,18 @@
+# Rendered with every Platform option set (see golden_test.go): https with a
+# port, a gateway listener, an egress allowlist, a storage class, a dedicated
+# node pool, a sandboxed runtime, an image mirror, a writable root filesystem
+# for the app, no generated credentials, and a stricter memory policy.
+version: 1
+services:
+  app:
+    build: {context: .}
+    port: 8080
+    public: true
+    health: {path: /ready, initialDelay: 20s}
+    dependsOn: [postgres]
+dependencies:
+  postgres: {storage: 3Gi, seed: db/seed.sql}
+migrations: {service: app, command: ./migrate up, timeout: 10m}
+smokeTests:
+  - {name: ready, command: 'curl -fsS "$HEIMDALL_PUBLIC_URL/ready"', timeout: 1m}
+preview: {visibility: org, ttl: 24h}

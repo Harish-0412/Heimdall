@@ -1,0 +1,28 @@
+# Size presets, explicit requests, replicas, and a three-wave dependency chain
+# (gateway -> api -> auth).
+version: 1
+services:
+  gateway:
+    build: {context: gateway}
+    port: 8000
+    public: true
+    primary: true
+    resources: {size: small}
+    dependsOn: [api]
+  api:
+    build: {context: api}
+    port: 8080
+    public: true
+    resources: {size: large}
+    dependsOn: [auth]
+  auth:
+    build: {context: auth}
+    port: 9000
+    resources: {cpu: "0.75", memory: 768Mi, requests: {cpu: 300m, memory: 512Mi}}
+workers:
+  jobs:
+    build: {context: api}
+    command: bin/worker
+    replicas: 3
+    resources: {size: medium}
+    dependsOn: [api]

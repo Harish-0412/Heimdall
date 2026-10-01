@@ -1,0 +1,86 @@
+# Default values for heimdall-agent. See README.md for every permission the
+# chart grants and why.
+
+image:
+  repository: ghcr.io/heimdall-dev/heimdall-agent
+  # Defaults to the chart's appVersion.
+  tag: ""
+  # Pin the image by digest in production ("sha256:..."); takes precedence
+  # over tag, which can be moved after review.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# The agent runs a single active replica. Leader election arrives with the
+# controller (phase 3); until then keep this at 1.
+replicaCount: 1
+
+# Name of this cluster as shown in the Heimdall dashboard.
+clusterName: ""
+
+controlPlane:
+  # Heimdall API the agent connects out to (outbound only, ADR 0004).
+  url: ""
+  # Existing Secret holding this cluster's credential under the key "token".
+  # Create it out of band; the chart never contains credentials.
+  credentialsSecret: ""
+
+# Prefix of preview namespace names. Must match the agent's naming
+# (internal/render.NamespacePrefix); the admission policy enforces it.
+previewNamespacePrefix: heimdall-
+
+# debug | info | warn | error
+logLevel: info
+
+rbac:
+  # Grant cluster-wide get/list/watch on the workload kinds the agent manages,
+  # so it can watch every preview namespace with one informer per kind.
+  # Secrets, ConfigMaps and pod logs are never readable cluster-wide: those
+  # rights exist only inside preview namespaces. Set to false to confine all
+  # access to preview namespaces (the agent then watches namespace by
+  # namespace).
+  clusterWideRead: true
+
+admissionPolicy:
+  # Confine the agent's namespace and RoleBinding writes to preview
+  # namespaces with ValidatingAdmissionPolicies. Strongly recommended: without
+  # it the agent could create RoleBindings in any namespace.
+  enabled: true
+
+serviceAccount:
+  create: true
+  # Defaults to the release's full name.
+  name: ""
+  # For example eks.amazonaws.com/role-arn when the agent pulls config bundles
+  # from a private registry with IAM (IRSA). Previews never get this identity.
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""
+
+metrics:
+  port: 8080
+
+probes:
+  port: 8081
+
+networkPolicy:
+  # Allow ingress only to the metrics port. The agent needs no other inbound
+  # traffic; its egress (API server, control plane, registries) is open.
+  enabled: true
+  # Peers allowed to scrape metrics (NetworkPolicyPeer list). Empty allows
+  # any source.
+  metricsFrom: []

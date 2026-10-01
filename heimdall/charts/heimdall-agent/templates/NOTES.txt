@@ -1,0 +1,21 @@
+The Heimdall agent is installed in namespace {{ .Release.Namespace }}.
+
+It manages preview namespaces named {{ .Values.previewNamespacePrefix }}* and
+labelled heimdall.dev/preview=true, and nothing else.
+{{- if not .Values.admissionPolicy.enabled }}
+
+WARNING: admissionPolicy.enabled=false. Without the admission policies the
+agent can create RoleBindings in any namespace. Enable them unless your
+cluster runs Kubernetes older than 1.30.
+{{- end }}
+{{- if not .Values.controlPlane.url }}
+
+The agent has no control plane configured (controlPlane.url). It will start
+but receive no work until one is set.
+{{- end }}
+
+Check it:
+  kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "heimdall-agent.fullname" . }}
+
+Review exactly what it may do:
+  kubectl describe clusterrole {{ include "heimdall-agent.fullname" . }} {{ include "heimdall-agent.previewManager" . }}

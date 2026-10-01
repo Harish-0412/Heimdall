@@ -1,0 +1,14 @@
+# Prebuilt images: one pinned in the file itself, one resolved by CI.
+version: 1
+services:
+  web:
+    image: ghcr.io/acme/storefront:2.4.1@sha256:1111111111111111111111111111111111111111111111111111111111111111
+    port: 80
+    public: true
+    health: {path: /}
+workers:
+  sync:
+    image: ghcr.io/acme/sync:1.0
+    command: ./sync --loop
+dependencies:
+  redis: {version: "6"}

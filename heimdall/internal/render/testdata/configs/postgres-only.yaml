@@ -1,0 +1,11 @@
+# Postgres without migrations or seed: the baseline stage still prepares and
+# clones an (empty) database, so DATABASE_URL always points somewhere real.
+version: 1
+services:
+  api:
+    build: {context: .}
+    port: 3000
+    public: true
+    dependsOn: [postgres]
+dependencies:
+  postgres: {version: "17"}

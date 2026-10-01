@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=../../schema/heimdall.schema.json
+# Example: the ShopFlow e-commerce stack from the Heimdall product brief.
+# Storefront + Node.js API + PostgreSQL + Redis + RabbitMQ + email worker.
+# The app itself lives next to this file (web/, api/, fixtures/) and is what
+# the kind end-to-end test deploys (test/e2e/kind/run.sh).
+version: 1
+
+services:
+  web:
+    build:
+      context: web
+    port: 3000
+    public: true
+    primary: true # https://pr-<N>.shopflow.heimdall.dev
+    health:
+      path: /
+    dependsOn: [api]
+
+  api:
+    build:
+      context: api
+    port: 8080
+    public: true # https://pr-<N>-api.shopflow.heimdall.dev
+    health:
+      path: /health
+    env:
+      NODE_ENV: production
+      LOG_LEVEL: debug
+    secrets:
+      - STRIPE_TEST_KEY
+    resources:
+      cpu: 500m
+      memory: 512Mi
+    dependsOn: [postgres, redis, rabbitmq]
+
+workers:
+  notifications:
+    build:
+      context: api
+    command: npm run worker
+    dependsOn: [api, postgres, rabbitmq]
+
+dependencies:
+  postgres:
+    version: "16"
+    storage: 2Gi
+    seed: fixtures/dev.sql
+  redis: {}
+  rabbitmq: {}
+
+migrations:
+  service: api
+  command: npm run migrate
+  timeout: 5m
+
+smokeTests:
+  - name: api-health
+    command: curl -f http://api:8080/health
+  - name: storefront
+    command: curl -f http://web:3000/
+
+preview:
+  ttl: 48h
+  sleepAfter: 4h
+  visibility: private

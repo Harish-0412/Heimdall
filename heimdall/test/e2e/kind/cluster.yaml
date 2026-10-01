@@ -1,0 +1,8 @@
+# kind cluster for the P1 end-to-end test. kind's default node image is pinned
+# by digest in each kind release; override it with KIND_NODE_IMAGE.
+# kindnet enforces NetworkPolicy (kind v0.24+), so the rendered policies are
+# exercised for real, not ignored.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane

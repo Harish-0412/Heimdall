@@ -1,0 +1,97 @@
+{{- if .Values.admissionPolicy.enabled }}
+{{- $fullname := include "heimdall-agent.fullname" . }}
+{{- $prefix := .Values.previewNamespacePrefix }}
+{{- /*
+RBAC cannot say "only namespaces you created", so these policies do. They
+apply only to requests from the agent's service account and deny:
+  - creating, changing or deleting any namespace that is not a preview
+    namespace (name prefix and heimdall.dev/preview=true label), including
+    turning an existing namespace into one by labelling it;
+  - any RoleBinding outside preview namespaces, or one that binds anything but
+    the preview-manager role.
+Reads do not pass through admission; read access is limited by RBAC alone.
+*/}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $fullname }}-namespaces
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["namespaces"]
+  matchConditions:
+    - name: is-heimdall-agent
+      expression: {{ printf "request.userInfo.username == %s" (include "heimdall-agent.username" . | squote) | quote }}
+  variables:
+    - name: prefix
+      expression: {{ $prefix | squote | quote }}
+  validations:
+    - expression: >-
+        request.operation == 'DELETE' ||
+        ({{ include "heimdall-agent.celIsPreview" (dict "obj" "object") }})
+      message: "the Heimdall agent may only create or update namespaces named {{ $prefix }}* that carry heimdall.dev/preview=true"
+      reason: Forbidden
+    - expression: >-
+        request.operation == 'CREATE' ||
+        ({{ include "heimdall-agent.celIsPreview" (dict "obj" "oldObject") }})
+      message: "the Heimdall agent may only change or delete namespaces it created for previews"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $fullname }}-namespaces
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $fullname }}-namespaces
+  validationActions: ["Deny"]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $fullname }}-rolebindings
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["rolebindings"]
+  matchConditions:
+    - name: is-heimdall-agent
+      expression: {{ printf "request.userInfo.username == %s" (include "heimdall-agent.username" . | squote) | quote }}
+  variables:
+    - name: prefix
+      expression: {{ $prefix | squote | quote }}
+  validations:
+    - expression: >-
+        namespaceObject != null &&
+        ({{ include "heimdall-agent.celIsPreview" (dict "obj" "namespaceObject") }})
+      message: "the Heimdall agent may only manage role bindings inside preview namespaces"
+      reason: Forbidden
+    - expression: >-
+        request.operation == 'DELETE' ||
+        (object.roleRef.kind == 'ClusterRole' && object.roleRef.name == {{ include "heimdall-agent.previewManager" . | squote }})
+      message: "the Heimdall agent may only bind {{ include "heimdall-agent.previewManager" . }}"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $fullname }}-rolebindings
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $fullname }}-rolebindings
+  validationActions: ["Deny"]
+{{- end }}

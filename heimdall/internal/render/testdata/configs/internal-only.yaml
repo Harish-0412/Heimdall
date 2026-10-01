@@ -1,0 +1,17 @@
+# No public service: no routes, no gateway ingress, no public URL variables.
+version: 1
+services:
+  api:
+    build: {context: .}
+    port: 8080
+    health: {path: /health}
+workers:
+  consumer:
+    build: {context: .}
+    command: bin/consume
+    dependsOn: [api, rabbitmq]
+dependencies:
+  rabbitmq: {version: "3.12"}
+smokeTests:
+  - name: api-internal
+    command: curl -fsS http://api:8080/health
