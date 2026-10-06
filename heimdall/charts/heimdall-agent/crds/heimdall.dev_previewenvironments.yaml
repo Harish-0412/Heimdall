@@ -82,6 +82,26 @@ spec:
               config:
                 description: Config is the heimdall.yaml to deploy.
                 properties:
+                  approvedBy:
+                    description: ApprovedBy records explicit maintainer approval when
+                      no baseline exists.
+                    maxLength: 256
+                    type: string
+                  baseline:
+                    description: |-
+                      Baseline is the canonical default-branch configuration used to check
+                      that this pull request cannot increase access or resource ceilings.
+                    maxLength: 262144
+                    type: string
+                  baselineSHA256:
+                    pattern: ^[a-f0-9]{64}$
+                    type: string
+                  bundle:
+                    description: Bundle is the digest-pinned OCI artifact in the customer's
+                      registry.
+                    maxLength: 512
+                    pattern: ^[A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}$
+                    type: string
                   inline:
                     description: Inline is the heimdall.yaml document, at most 256
                       KiB.
@@ -220,6 +240,13 @@ spec:
                 x-kubernetes-validations:
                 - message: tenant is immutable
                   rule: self == oldSelf
+              traceParent:
+                description: |-
+                  TraceParent links a desired deployment to its verified ingress trace.
+                  It is metadata; it never participates in engine generation identity.
+                maxLength: 128
+                pattern: ^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}(-[0-9a-f]+)*$
+                type: string
               urlSuffix:
                 description: URLSuffix makes preview hostnames hard to guess; random
                   per environment.

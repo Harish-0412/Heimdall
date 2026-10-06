@@ -22,6 +22,14 @@ Check it:
 Create a preview environment (docs/agent.md has a complete example):
   kubectl -n {{ .Release.Namespace }} apply -f preview.yaml
   kubectl -n {{ .Release.Namespace }} get previewenvironments -w
+{{- else if eq .Values.source.type "api" }}
+
+Desired state and tenant policy are pulled outbound from {{ .Values.source.controlPlane.url }}
+for cluster {{ .Values.source.controlPlane.clusterID }} every {{ .Values.source.syncInterval }}.
+Prepare Secret {{ .Values.source.controlPlane.authSecret }} with its one-use enrollment
+before the agent starts (docs/control-plane.md). The agent rotates credentials
+in that Secret and reports the runtime timeline to the API:
+  kubectl -n {{ .Release.Namespace }} get previewenvironments -w
 {{- else }}
 
 Desired state is read from ConfigMap {{ .Values.source.configMap }} (key {{ .Values.source.key }}) every

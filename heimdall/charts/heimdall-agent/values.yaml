@@ -24,13 +24,22 @@ logLevel: info
 #              state; operators kubectl-apply them.
 #   configmap: a DesiredState document in a ConfigMap in this namespace; the
 #              agent writes the PreviewEnvironment objects, and only the agent
-#              may (admission policy). Until P5, when the control plane's API
-#              becomes the source.
+#              may (admission policy).
+#   api:       authoritative control-plane state, pulled outbound with a
+#              cluster-bound credential and current tenant policy.
 source:
   type: cluster
   configMap: heimdall-desired-state
   key: desired-state.yaml
   syncInterval: 30s
+  # Set type: api to enable the outbound control-plane channel.
+  controlPlane:
+    url: ""
+    clusterID: ""
+    authSecret: heimdall-agent-auth
+    allowLocalHTTP: false
+    registryPlainHTTP: false
+    dockerConfig: ""
 
 # The cluster, as previews see it (docs/rendering.md, "Platform settings").
 platform:
@@ -58,7 +67,8 @@ platform:
   imageMirror: ""
   writableRootFilesystem: false
 
-# Tenant policy (ADR 0006) until the control plane delivers it (P5).
+# Local policy for cluster/configmap modes (ADR 0006). API mode uses the
+# authenticated control plane's policy and fails closed when it becomes stale.
 # Omitted limits take the platform defaults (docs/config-reference.md).
 policy:
   maxVisibility: private

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -27,10 +28,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/heimdall-dev/heimdall/internal/api/v1alpha1"
+	"github.com/heimdall-dev/heimdall/internal/bundle"
+	"github.com/heimdall-dev/heimdall/internal/controlclient"
 	"github.com/heimdall-dev/heimdall/internal/controller"
 	"github.com/heimdall-dev/heimdall/internal/engine"
 	"github.com/heimdall-dev/heimdall/internal/source"
 	"github.com/heimdall-dev/heimdall/internal/sweeper"
+	"github.com/heimdall-dev/heimdall/internal/version"
 	"github.com/heimdall-dev/heimdall/internal/webhook"
 )
 
@@ -122,6 +126,38 @@ func Run(ctx context.Context, rc *rest.Config, o Options) error {
 	stepTimeout := cfg.Operations.StepTimeout.Duration
 	access := NewAccess(mgr.GetClient(), mgr.GetAPIReader(), o.PreviewManagerRole, o.Namespace, o.ServiceAccount)
 	specs := controller.SpecBuilder{Policy: policy, Platform: cfg.Platform.Platform(), Data: configMapData(mgr.GetAPIReader(), o.Namespace)}
+	var src source.Source
+	var control *controlclient.Client
+	if cfg.Source.Type == SourceAPI {
+		p := cfg.Source.ControlPlane
+		direct, err := client.New(rc, client.Options{Scheme: scheme})
+		if err != nil {
+			return err
+		}
+		control, err = controlclient.New(p.URL, p.ClusterID, version.Version, &controlclient.SecretStore{Client: direct, Namespace: o.Namespace, Name: p.AuthSecret}, p.AllowLocalHTTP)
+		if err != nil {
+			return err
+		}
+		api := &source.API{Control: control, Client: direct, Namespace: o.Namespace, ClusterID: p.ClusterID, Interval: cfg.Source.SyncInterval.Duration,
+			LoadBundle: func(ctx context.Context, ref, sha string) (*bundle.Contents, error) {
+				return bundle.Fetch(ctx, ref, sha, bundle.RegistryOptions{PlainHTTP: p.RegistryPlainHTTP, DockerConfig: p.DockerConfig})
+			}}
+		specs.PolicyFor, src = api.PolicyFor, api
+		if err := mgr.Add(api); err != nil {
+			return err
+		}
+		if err := mgr.AddReadyzCheck("control-plane-policy", func(*http.Request) error { return api.PolicyReady() }); err != nil {
+			return err
+		}
+		if err := mgr.Add(&Reporter{Control: control, Source: api, Reader: mgr.GetAPIReader(), Namespace: o.Namespace, Specs: specs, Engine: engine.New(cluster, stepTimeout, nil), Kubernetes: clientset, Log: o.Log.WithName("control-plane")}); err != nil {
+			return err
+		}
+	} else {
+		src, err = newSource(cfg.Source, mgr.GetAPIReader(), o.Namespace)
+		if err != nil {
+			return err
+		}
+	}
 
 	var guard controller.Guard = controller.Allowed{}
 	if *cfg.Admission.RequirePolicy {
@@ -158,10 +194,6 @@ func Run(ctx context.Context, rc *rest.Config, o Options) error {
 		return err
 	}
 
-	src, err := newSource(cfg.Source, mgr.GetAPIReader(), o.Namespace)
-	if err != nil {
-		return err
-	}
 	if src.Managed() {
 		if err := mgr.Add(&source.Syncer{Source: src, Client: mgr.GetClient(), Namespace: o.Namespace,
 			Interval: cfg.Source.SyncInterval.Duration, Metrics: source.NewMetrics(metrics.Registry), Log: o.Log.WithName("source")}); err != nil {

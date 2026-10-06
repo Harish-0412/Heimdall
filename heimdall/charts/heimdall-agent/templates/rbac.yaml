@@ -154,6 +154,17 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get"]
+  {{- if eq .Values.source.type "api" }}
+  # Immutable approved OCI fixtures, held only in the cluster namespace.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "list", "update", "delete"]
+  # Shared credential rotation survives restarts and leader failover.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "update"]
+    resourceNames: [{{ .Values.source.controlPlane.authSecret | quote }}]
+  {{- end }}
   # Its webhook certificate, and no other Secret.
   - apiGroups: [""]
     resources: ["secrets"]

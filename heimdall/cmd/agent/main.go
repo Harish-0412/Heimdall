@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/heimdall-dev/heimdall/internal/agent"
+	"github.com/heimdall-dev/heimdall/internal/tracecontext"
 	"github.com/heimdall-dev/heimdall/internal/version"
 )
 
@@ -25,6 +27,8 @@ func main() {
 }
 
 func run(args []string) int {
+	stopTrace := tracecontext.Initialize()
+	defer func() { _ = stopTrace(context.Background()) }()
 	fs := flag.NewFlagSet("agent", flag.ContinueOnError)
 	configPath := fs.String("config", "/etc/heimdall/agent.yaml", "agent configuration file")
 	metricsAddr := fs.String("metrics-bind-address", ":8443", `metrics endpoint ("0" disables)`)

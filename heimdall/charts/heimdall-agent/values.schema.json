@@ -32,7 +32,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "type": {"enum": ["cluster", "configmap"]},
+        "type": {"enum": ["cluster", "configmap", "api"]},
+        "controlPlane": {"type":"object","additionalProperties":false,"properties":{
+          "url":{"type":"string"},"clusterID":{"type":"string"},"authSecret":{"type":"string","pattern":"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"},
+          "allowLocalHTTP":{"type":"boolean"},"registryPlainHTTP":{"type":"boolean"},"dockerConfig":{"type":"string"}
+        },"required":["url","clusterID","authSecret"]},
         "configMap": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", "maxLength": 253},
         "key": {"type": "string", "pattern": "^[-._a-zA-Z0-9]+$"},
         "syncInterval": {"$ref": "#/definitions/duration"}

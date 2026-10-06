@@ -8,6 +8,12 @@ every problem; `heimdall-agent --config` documents nothing else.
 {{- $_ := set $source "configMap" (required "source.configMap is required for source.type=configmap" .Values.source.configMap) }}
 {{- $_ := set $source "key" .Values.source.key }}
 {{- end }}
+{{- if eq .Values.source.type "api" }}
+{{- $_ := required "source.controlPlane.url is required for API source" .Values.source.controlPlane.url }}
+{{- $_ := required "source.controlPlane.clusterID is required for API source" .Values.source.controlPlane.clusterID }}
+{{- $_ := required "source.controlPlane.authSecret is required for API source" .Values.source.controlPlane.authSecret }}
+{{- $_ := set $source "controlPlane" .Values.source.controlPlane }}
+{{- end }}
 {{- $_ := required "platform.baseDomain is required: the DNS zone covered by the cluster's wildcard certificate" .Values.platform.baseDomain }}
 {{- $config := dict
   "source" $source

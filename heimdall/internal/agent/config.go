@@ -6,6 +6,7 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ const (
 	SourceCluster   = "cluster"   // PreviewEnvironment objects are the desired state (kubectl apply)
 	SourceConfigMap = "configmap" // a DesiredState document in a ConfigMap in the agent's namespace
 	SourceFile      = "file"      // a DesiredState document on disk (development)
+	SourceAPI       = "api"       // outbound control-plane communication
 )
 
 // Config is the agent's configuration file (charts/heimdall-agent renders it
@@ -47,7 +49,19 @@ type SourceConfig struct {
 	// Path locates the document for type file.
 	Path string `json:"path,omitempty"`
 	// SyncInterval is how often the source is read. Default 30s.
-	SyncInterval metav1.Duration `json:"syncInterval,omitempty"`
+	SyncInterval metav1.Duration     `json:"syncInterval,omitempty"`
+	ControlPlane *ControlPlaneConfig `json:"controlPlane,omitempty"`
+}
+
+// ControlPlaneConfig is operator input. AuthSecret is a pre-created Secret
+// containing enrollment; the agent updates only this Secret with its session.
+type ControlPlaneConfig struct {
+	URL               string `json:"url"`
+	ClusterID         string `json:"clusterID"`
+	AuthSecret        string `json:"authSecret"`
+	AllowLocalHTTP    bool   `json:"allowLocalHTTP,omitempty"`
+	RegistryPlainHTTP bool   `json:"registryPlainHTTP,omitempty"`
+	DockerConfig      string `json:"dockerConfig,omitempty"`
 }
 
 // PlatformConfig mirrors render.Platform (docs/rendering.md).
@@ -221,8 +235,21 @@ func (c *Config) validate() error {
 		if c.Source.Path == "" {
 			bad("source.path is required for type file")
 		}
+	case SourceAPI:
+		p := c.Source.ControlPlane
+		if p == nil {
+			bad("source.controlPlane is required for type api")
+			break
+		}
+		u, err := url.Parse(p.URL)
+		if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") || (u.Scheme != "https" && (!p.AllowLocalHTTP || u.Scheme != "http")) {
+			bad("source.controlPlane.url must be an HTTPS origin")
+		}
+		if p.ClusterID == "" || p.AuthSecret == "" {
+			bad("source.controlPlane.clusterID and authSecret are required")
+		}
 	default:
-		bad("source.type %q must be cluster, configmap or file", c.Source.Type)
+		bad("source.type %q must be cluster, configmap, file or api", c.Source.Type)
 	}
 	if _, err := c.Policy.Policy(); err != nil {
 		errs = append(errs, err)
