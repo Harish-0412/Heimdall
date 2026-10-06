@@ -24,6 +24,12 @@ const (
 // +kubebuilder:validation:XValidation:rule="self.generation > oldSelf.generation || (self.commit == oldSelf.commit && self.config == oldSelf.config && (has(self.images) ? (has(oldSelf.images) && self.images == oldSelf.images) : !has(oldSelf.images)) && (has(self.data) ? (has(oldSelf.data) && self.data == oldSelf.data) : !has(oldSelf.data)))",message="changed deployment inputs (commit, config, images or data) require a higher spec.generation"
 // +kubebuilder:validation:XValidation:rule="self.resetNonce >= oldSelf.resetNonce",message="spec.resetNonce must not decrease"
 type PreviewEnvironmentSpec struct {
+	// TraceParent links a desired deployment to its verified ingress trace.
+	// It is metadata; it never participates in engine generation identity.
+	// +kubebuilder:validation:MaxLength=128
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}(-[0-9a-f]+)*$`
+	// +optional
+	TraceParent string `json:"traceParent,omitempty"`
 	// Tenant is the tenant's slug.
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$`
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="tenant is immutable"
@@ -109,6 +115,25 @@ type ConfigSource struct {
 	// SHA256 is the lowercase hex SHA-256 of Inline.
 	// +kubebuilder:validation:Pattern=`^[a-f0-9]{64}$`
 	SHA256 string `json:"sha256"`
+
+	// Bundle is the digest-pinned OCI artifact in the customer's registry.
+	// +optional
+	// +kubebuilder:validation:MaxLength=512
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}$`
+	Bundle string `json:"bundle,omitempty"`
+
+	// Baseline is the canonical default-branch configuration used to check
+	// that this pull request cannot increase access or resource ceilings.
+	// +optional
+	// +kubebuilder:validation:MaxLength=262144
+	Baseline string `json:"baseline,omitempty"`
+	// +optional
+	// +kubebuilder:validation:Pattern=`^[a-f0-9]{64}$`
+	BaselineSHA256 string `json:"baselineSHA256,omitempty"`
+	// ApprovedBy records explicit maintainer approval when no baseline exists.
+	// +optional
+	// +kubebuilder:validation:MaxLength=256
+	ApprovedBy string `json:"approvedBy,omitempty"`
 }
 
 // DataSource points at an approved import held in a ConfigMap in the agent's

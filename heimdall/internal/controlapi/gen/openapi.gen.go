@@ -215,8 +215,12 @@ type CreateEnvironment struct {
 // DesiredSnapshot defines model for DesiredSnapshot.
 type DesiredSnapshot struct {
 	Environments []Environment `json:"environments"`
-	Policy       Policy        `json:"policy"`
-	Revision     string        `json:"revision"`
+
+	// Policy Administrator policy. TTL values are integer nanoseconds, matching the Go duration contract. Explicit empty allowlists deny all; null allowlists are rejected.
+	Policy     Policy `json:"policy"`
+	Revision   string `json:"revision"`
+	TenantID   string `json:"tenantID"`
+	TenantSlug string `json:"tenantSlug"`
 }
 
 // Enrollment defines model for Enrollment.
@@ -319,7 +323,7 @@ type LogResult struct {
 // LogResultRedacted defines model for LogResult.Redacted.
 type LogResultRedacted bool
 
-// Policy defines model for Policy.
+// Policy Administrator policy. TTL values are integer nanoseconds, matching the Go duration contract. Explicit empty allowlists deny all; null allowlists are rejected.
 type Policy = config.Policy
 
 // StatusUpdate defines model for StatusUpdate.
@@ -363,6 +367,16 @@ type Limit = int
 
 // RequestID defines model for RequestID.
 type RequestID = string
+
+// RefreshAgentParams defines parameters for RefreshAgent.
+type RefreshAgentParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
+
+// RegisterAgentParams defines parameters for RegisterAgent.
+type RegisterAgentParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+}
 
 // ListEnvironmentsParams defines parameters for ListEnvironments.
 type ListEnvironmentsParams struct {
@@ -540,20 +554,20 @@ type ClientInterface interface {
 
 	// RefreshAgent performs a POST /v1/agent/refresh (the `RefreshAgent` operationId) request.
 	//
-	// Atomically exchange a single-use refresh bearer token. Old refresh tokens cannot be replayed.
-	RefreshAgent(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Atomically rotate a refresh bearer token. Persist an idempotency key before exchange; the same token and key recover the same successor pair within a bounded two-minute lost-response window. Any other replay is denied.
+	RefreshAgent(ctx context.Context, params *RefreshAgentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RegisterAgentWithBody performs a POST /v1/agent/register (the `RegisterAgent` operationId) request,
 	// with any type of body and a specified content type.
 	//
 	// Exchange a single-use enrollment bearer token for a cluster-bound token pair.
-	RegisterAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	RegisterAgentWithBody(ctx context.Context, params *RegisterAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RegisterAgent performs a POST /v1/agent/register (the `RegisterAgent` operationId) request.
 	// Takes a body of the `application/json` content type.
 	//
 	// Exchange a single-use enrollment bearer token for a cluster-bound token pair.
-	RegisterAgent(ctx context.Context, body RegisterAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	RegisterAgent(ctx context.Context, params *RegisterAgentParams, body RegisterAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListClusters performs a GET /v1/clusters (the `ListClusters` operationId) request.
 	ListClusters(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -577,10 +591,14 @@ type ClientInterface interface {
 
 	// CreateEnvironmentWithBody performs a POST /v1/environments (the `CreateEnvironment` operationId) request,
 	// with any type of body and a specified content type.
+	//
+	// Administrator-only manual desired-state override. Members launch previews through canonical GitHub integration; caller-supplied approval identities are discarded.
 	CreateEnvironmentWithBody(ctx context.Context, params *CreateEnvironmentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateEnvironment performs a POST /v1/environments (the `CreateEnvironment` operationId) request.
 	// Takes a body of the `application/json` content type.
+	//
+	// Administrator-only manual desired-state override. Members launch previews through canonical GitHub integration; caller-supplied approval identities are discarded.
 	CreateEnvironment(ctx context.Context, params *CreateEnvironmentParams, body CreateEnvironmentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetEnvironment performs a GET /v1/environments/{environmentID} (the `GetEnvironment` operationId) request.
@@ -785,9 +803,9 @@ func (c *Client) CompleteLogs(ctx context.Context, requestID RequestID, body Com
 
 // RefreshAgent performs a POST /v1/agent/refresh (the `RefreshAgent` operationId) request.
 //
-// Atomically exchange a single-use refresh bearer token. Old refresh tokens cannot be replayed.
-func (c *Client) RefreshAgent(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRefreshAgentRequest(c.Server)
+// Atomically rotate a refresh bearer token. Persist an idempotency key before exchange; the same token and key recover the same successor pair within a bounded two-minute lost-response window. Any other replay is denied.
+func (c *Client) RefreshAgent(ctx context.Context, params *RefreshAgentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRefreshAgentRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -802,8 +820,8 @@ func (c *Client) RefreshAgent(ctx context.Context, reqEditors ...RequestEditorFn
 // with any type of body and a specified content type.
 //
 // Exchange a single-use enrollment bearer token for a cluster-bound token pair.
-func (c *Client) RegisterAgentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRegisterAgentRequestWithBody(c.Server, contentType, body)
+func (c *Client) RegisterAgentWithBody(ctx context.Context, params *RegisterAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRegisterAgentRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -818,8 +836,8 @@ func (c *Client) RegisterAgentWithBody(ctx context.Context, contentType string, 
 // Takes a body of the `application/json` content type.
 //
 // Exchange a single-use enrollment bearer token for a cluster-bound token pair.
-func (c *Client) RegisterAgent(ctx context.Context, body RegisterAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRegisterAgentRequest(c.Server, body)
+func (c *Client) RegisterAgent(ctx context.Context, params *RegisterAgentParams, body RegisterAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRegisterAgentRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -912,6 +930,8 @@ func (c *Client) ListEnvironments(ctx context.Context, params *ListEnvironmentsP
 
 // CreateEnvironmentWithBody performs a POST /v1/environments (the `CreateEnvironment` operationId) request,
 // with any type of body and a specified content type.
+//
+// Administrator-only manual desired-state override. Members launch previews through canonical GitHub integration; caller-supplied approval identities are discarded.
 func (c *Client) CreateEnvironmentWithBody(ctx context.Context, params *CreateEnvironmentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateEnvironmentRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
@@ -926,6 +946,8 @@ func (c *Client) CreateEnvironmentWithBody(ctx context.Context, params *CreateEn
 
 // CreateEnvironment performs a POST /v1/environments (the `CreateEnvironment` operationId) request.
 // Takes a body of the `application/json` content type.
+//
+// Administrator-only manual desired-state override. Members launch previews through canonical GitHub integration; caller-supplied approval identities are discarded.
 func (c *Client) CreateEnvironment(ctx context.Context, params *CreateEnvironmentParams, body CreateEnvironmentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateEnvironmentRequest(c.Server, params, body)
 	if err != nil {
@@ -1394,7 +1416,7 @@ func NewCompleteLogsRequestWithBody(server string, requestID RequestID, contentT
 }
 
 // NewRefreshAgentRequest constructs an http.Request for the RefreshAgent method
-func NewRefreshAgentRequest(server string) (*http.Request, error) {
+func NewRefreshAgentRequest(server string, params *RefreshAgentParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -1417,22 +1439,35 @@ func NewRefreshAgentRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
+
 	return req, nil
 }
 
 // NewRegisterAgentRequest calls the generic RegisterAgent builder with application/json body
-func NewRegisterAgentRequest(server string, body RegisterAgentJSONRequestBody) (*http.Request, error) {
+func NewRegisterAgentRequest(server string, params *RegisterAgentParams, body RegisterAgentJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewRegisterAgentRequestWithBody(server, "application/json", bodyReader)
+	return NewRegisterAgentRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewRegisterAgentRequestWithBody constructs an http.Request for the RegisterAgent method, with any body, and a specified content type
-func NewRegisterAgentRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewRegisterAgentRequestWithBody(server string, params *RegisterAgentParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -1456,6 +1491,19 @@ func NewRegisterAgentRequestWithBody(server string, contentType string, body io.
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("Idempotency-Key", headerParam0)
+
+	}
 
 	return req, nil
 }
@@ -2281,10 +2329,10 @@ type ClientWithResponsesInterface interface {
 
 	// RefreshAgentWithResponse performs a POST /v1/agent/refresh (the `RefreshAgent` operationId) request.
 	//
-	// Atomically exchange a single-use refresh bearer token. Old refresh tokens cannot be replayed.
+	// Atomically rotate a refresh bearer token. Persist an idempotency key before exchange; the same token and key recover the same successor pair within a bounded two-minute lost-response window. Any other replay is denied.
 	//
 	// Returns a wrapper object for the known response body format(s).
-	RefreshAgentWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RefreshAgentResponse, error)
+	RefreshAgentWithResponse(ctx context.Context, params *RefreshAgentParams, reqEditors ...RequestEditorFn) (*RefreshAgentResponse, error)
 
 	// RegisterAgentWithBodyWithResponse performs a POST /v1/agent/register (the `RegisterAgent` operationId) request,
 	// with any type of body and a specified content type.
@@ -2292,13 +2340,13 @@ type ClientWithResponsesInterface interface {
 	// Exchange a single-use enrollment bearer token for a cluster-bound token pair.
 	//
 	// Returns a wrapper object for the known response body format(s).
-	RegisterAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterAgentResponse, error)
+	RegisterAgentWithBodyWithResponse(ctx context.Context, params *RegisterAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterAgentResponse, error)
 
 	// RegisterAgentWithResponse performs a POST /v1/agent/register (the `RegisterAgent` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Exchange a single-use enrollment bearer token for a cluster-bound token pair.
-	RegisterAgentWithResponse(ctx context.Context, body RegisterAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterAgentResponse, error)
+	RegisterAgentWithResponse(ctx context.Context, params *RegisterAgentParams, body RegisterAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterAgentResponse, error)
 
 	// ListClustersWithResponse performs a GET /v1/clusters (the `ListClusters` operationId) request.
 	//
@@ -2333,11 +2381,15 @@ type ClientWithResponsesInterface interface {
 	// CreateEnvironmentWithBodyWithResponse performs a POST /v1/environments (the `CreateEnvironment` operationId) request,
 	// with any type of body and a specified content type.
 	//
+	// Administrator-only manual desired-state override. Members launch previews through canonical GitHub integration; caller-supplied approval identities are discarded.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	CreateEnvironmentWithBodyWithResponse(ctx context.Context, params *CreateEnvironmentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEnvironmentResponse, error)
 
 	// CreateEnvironmentWithResponse performs a POST /v1/environments (the `CreateEnvironment` operationId) request.
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Administrator-only manual desired-state override. Members launch previews through canonical GitHub integration; caller-supplied approval identities are discarded.
 	CreateEnvironmentWithResponse(ctx context.Context, params *CreateEnvironmentParams, body CreateEnvironmentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEnvironmentResponse, error)
 
 	// GetEnvironmentWithResponse performs a GET /v1/environments/{environmentID} (the `GetEnvironment` operationId) request.
@@ -3680,11 +3732,11 @@ func (c *ClientWithResponses) CompleteLogsWithResponse(ctx context.Context, requ
 
 // RefreshAgentWithResponse performs a POST /v1/agent/refresh (the `RefreshAgent` operationId) request.
 //
-// Atomically exchange a single-use refresh bearer token. Old refresh tokens cannot be replayed.
+// Atomically rotate a refresh bearer token. Persist an idempotency key before exchange; the same token and key recover the same successor pair within a bounded two-minute lost-response window. Any other replay is denied.
 //
 // Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) RefreshAgentWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*RefreshAgentResponse, error) {
-	rsp, err := c.RefreshAgent(ctx, reqEditors...)
+func (c *ClientWithResponses) RefreshAgentWithResponse(ctx context.Context, params *RefreshAgentParams, reqEditors ...RequestEditorFn) (*RefreshAgentResponse, error) {
+	rsp, err := c.RefreshAgent(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -3697,8 +3749,8 @@ func (c *ClientWithResponses) RefreshAgentWithResponse(ctx context.Context, reqE
 // Exchange a single-use enrollment bearer token for a cluster-bound token pair.
 //
 // Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) RegisterAgentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterAgentResponse, error) {
-	rsp, err := c.RegisterAgentWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) RegisterAgentWithBodyWithResponse(ctx context.Context, params *RegisterAgentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RegisterAgentResponse, error) {
+	rsp, err := c.RegisterAgentWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -3709,8 +3761,8 @@ func (c *ClientWithResponses) RegisterAgentWithBodyWithResponse(ctx context.Cont
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Exchange a single-use enrollment bearer token for a cluster-bound token pair.
-func (c *ClientWithResponses) RegisterAgentWithResponse(ctx context.Context, body RegisterAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterAgentResponse, error) {
-	rsp, err := c.RegisterAgent(ctx, body, reqEditors...)
+func (c *ClientWithResponses) RegisterAgentWithResponse(ctx context.Context, params *RegisterAgentParams, body RegisterAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*RegisterAgentResponse, error) {
+	rsp, err := c.RegisterAgent(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -3786,6 +3838,8 @@ func (c *ClientWithResponses) ListEnvironmentsWithResponse(ctx context.Context, 
 // CreateEnvironmentWithBodyWithResponse performs a POST /v1/environments (the `CreateEnvironment` operationId) request,
 // with any type of body and a specified content type.
 //
+// Administrator-only manual desired-state override. Members launch previews through canonical GitHub integration; caller-supplied approval identities are discarded.
+//
 // Returns a wrapper object for the known response body format(s).
 func (c *ClientWithResponses) CreateEnvironmentWithBodyWithResponse(ctx context.Context, params *CreateEnvironmentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEnvironmentResponse, error) {
 	rsp, err := c.CreateEnvironmentWithBody(ctx, params, contentType, body, reqEditors...)
@@ -3797,6 +3851,8 @@ func (c *ClientWithResponses) CreateEnvironmentWithBodyWithResponse(ctx context.
 
 // CreateEnvironmentWithResponse performs a POST /v1/environments (the `CreateEnvironment` operationId) request.
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Administrator-only manual desired-state override. Members launch previews through canonical GitHub integration; caller-supplied approval identities are discarded.
 func (c *ClientWithResponses) CreateEnvironmentWithResponse(ctx context.Context, params *CreateEnvironmentParams, body CreateEnvironmentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEnvironmentResponse, error) {
 	rsp, err := c.CreateEnvironment(ctx, params, body, reqEditors...)
 	if err != nil {
@@ -4787,10 +4843,10 @@ type ServerInterface interface {
 	CompleteLogs(w http.ResponseWriter, r *http.Request, requestID RequestID)
 
 	// (POST /v1/agent/refresh)
-	RefreshAgent(w http.ResponseWriter, r *http.Request)
+	RefreshAgent(w http.ResponseWriter, r *http.Request, params RefreshAgentParams)
 
 	// (POST /v1/agent/register)
-	RegisterAgent(w http.ResponseWriter, r *http.Request)
+	RegisterAgent(w http.ResponseWriter, r *http.Request, params RegisterAgentParams)
 
 	// (GET /v1/clusters)
 	ListClusters(w http.ResponseWriter, r *http.Request)
@@ -4881,12 +4937,12 @@ func (_ Unimplemented) CompleteLogs(w http.ResponseWriter, r *http.Request, requ
 }
 
 // (POST /v1/agent/refresh)
-func (_ Unimplemented) RefreshAgent(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) RefreshAgent(w http.ResponseWriter, r *http.Request, params RefreshAgentParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // (POST /v1/agent/register)
-func (_ Unimplemented) RegisterAgent(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) RegisterAgent(w http.ResponseWriter, r *http.Request, params RegisterAgentParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5104,8 +5160,39 @@ func (siw *ServerInterfaceWrapper) CompleteLogs(w http.ResponseWriter, r *http.R
 // RefreshAgent operation middleware
 func (siw *ServerInterfaceWrapper) RefreshAgent(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RefreshAgentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RefreshAgent(w, r)
+		siw.Handler.RefreshAgent(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5118,8 +5205,39 @@ func (siw *ServerInterfaceWrapper) RefreshAgent(w http.ResponseWriter, r *http.R
 // RegisterAgent operation middleware
 func (siw *ServerInterfaceWrapper) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RegisterAgentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RegisterAgent(w, r)
+		siw.Handler.RegisterAgent(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5803,55 +5921,64 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"92u1bf53AA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

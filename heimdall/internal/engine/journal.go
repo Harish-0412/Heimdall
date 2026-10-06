@@ -184,7 +184,10 @@ func (s *session) begin(ctx context.Context, generation int64, digest, operation
 	if generation < s.record.Generation {
 		return failure("engine.stale_generation", "generation is older than the accepted specification", nil)
 	}
-	if generation == s.record.Generation && s.record.Digest != "" && digest != s.record.Digest {
+	// Destroy is authorized by immutable namespace ownership, and must not
+	// depend on still having deployment config/data. Apply/reset still require
+	// the exact deployment digest when reusing a generation.
+	if operation != "destroy" && generation == s.record.Generation && s.record.Digest != "" && digest != s.record.Digest {
 		return failure("engine.generation_conflict", "changed specification requires a new generation", nil)
 	}
 	if operation == "reset" && (generation != s.record.Generation || s.record.Phase != "ready" && s.record.Operation != "reset") {

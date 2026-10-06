@@ -133,7 +133,7 @@ func (e *Engine) resetEphemeral(ctx context.Context, p *render.Plan) error {
 // Destroy never strips finalizers or force-deletes. A failed wait leaves the
 // namespace and evidence available for diagnosis or explicit break-glass.
 func (e *Engine) Destroy(ctx context.Context, spec Spec) (*Result, error) {
-	p, err := e.plan(spec)
+	p, err := render.CleanupPlan(spec.Context)
 	if err != nil {
 		return nil, err
 	}

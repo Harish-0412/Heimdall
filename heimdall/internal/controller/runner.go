@@ -9,6 +9,10 @@ import (
 
 	"github.com/heimdall-dev/heimdall/internal/api/v1alpha1"
 	"github.com/heimdall-dev/heimdall/internal/engine"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Operator executes engine operations; *engine.Engine implements it. Tests
@@ -177,12 +181,22 @@ func (r *Runner) Operator() Operator { return r.factory(nil) }
 // Launch starts fn for the environment. The caller must have checked that no
 // operation is in flight for it.
 func (r *Runner) Launch(name types.NamespacedName, key opKey, now time.Time, fn func(context.Context, Operator) (*engine.Result, error)) *operation {
+	return r.LaunchContext(context.Background(), name, key, now, fn)
+}
+
+// LaunchContext copies observability identity from the reconciliation while
+// retaining the manager's independent cancellation and leadership lifetime.
+func (r *Runner) LaunchContext(parent context.Context, name types.NamespacedName, key opKey, now time.Time, fn func(context.Context, Operator) (*engine.Result, error)) *operation {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	base := r.base
 	if base == nil {
 		base = context.Background()
 	}
+	if sc := trace.SpanContextFromContext(parent); sc.IsValid() {
+		base = trace.ContextWithSpanContext(base, sc)
+	}
+	base = logf.IntoContext(base, logf.FromContext(parent))
 	ctx, cancel := context.WithCancel(base)
 	op := &operation{key: key, started: now, cancel: cancel, done: make(chan struct{})}
 	r.ops[name] = op
@@ -192,6 +206,9 @@ func (r *Runner) Launch(name types.NamespacedName, key opKey, now time.Time, fn 
 		defer r.notify(name)
 		defer close(op.done)
 		defer cancel()
+		ctx, span := otel.Tracer("heimdall.controller").Start(ctx, "preview.operation")
+		defer span.End()
+		span.SetAttributes(attribute.String("operation", string(key.Type)), attribute.Int64("generation", key.Generation), attribute.String("env_id", name.Name))
 		select {
 		case r.slots <- struct{}{}:
 		case <-ctx.Done():

@@ -32,6 +32,7 @@ paths:
         default: {$ref: '#/components/responses/Error'}
     post:
       operationId: createEnvironment
+      description: Administrator-only manual desired-state override. Members launch previews through canonical GitHub integration; caller-supplied approval identities are discarded.
       parameters:
         - {$ref: '#/components/parameters/IdempotencyKey'}
       requestBody:
@@ -129,6 +130,8 @@ paths:
   /v1/agent/register:
     post:
       operationId: registerAgent
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
       description: Exchange a single-use enrollment bearer token for a cluster-bound token pair.
       requestBody:
         required: true
@@ -139,7 +142,9 @@ paths:
   /v1/agent/refresh:
     post:
       operationId: refreshAgent
-      description: Atomically exchange a single-use refresh bearer token. Old refresh tokens cannot be replayed.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      description: Atomically rotate a refresh bearer token. Persist an idempotency key before exchange; the same token and key recover the same successor pair within a bounded two-minute lost-response window. Any other replay is denied.
       responses:
         '200': {description: Rotated credentials, content: {application/json: {schema: {$ref: '#/components/schemas/TokenPair'}}}}
         default: {$ref: '#/components/responses/Error'}
@@ -156,7 +161,7 @@ paths:
     get:
       operationId: pullDesired
       responses:
-        '200': {description: Complete authoritative desired set for authenticated cluster; any error is unknown, never empty, content: {application/json: {schema: {$ref: '#/components/schemas/DesiredSnapshot'}}}}
+        '200': {description: 'Complete authoritative desired set for authenticated cluster; any error is unknown, never empty', content: {application/json: {schema: {$ref: '#/components/schemas/DesiredSnapshot'}}}}
         default: {$ref: '#/components/responses/Error'}
   /v1/agent/environments/{environmentID}/status:
     parameters:
@@ -319,6 +324,23 @@ components:
     Policy:
       type: object
       additionalProperties: false
+      description: Administrator policy. TTL values are integer nanoseconds, matching the Go duration contract. Explicit empty allowlists deny all; null allowlists are rejected.
+      required: [MaxServices, MaxWorkers, MaxContainerCPUMilli, MaxContainerMemoryMi, MaxTotalCPUMilli, MaxTotalMemoryMi, MaxPostgresStorageMi, MinMemoryRequestPercent, MinTTL, MaxTTL, MaxVisibility, AllowedSecrets, AllowedRegistries, AllowLargeSize]
+      properties:
+        MaxServices: {type: integer, minimum: 0, maximum: 16}
+        MaxWorkers: {type: integer, minimum: 0, maximum: 16}
+        MaxContainerCPUMilli: {type: integer, minimum: 1, maximum: 100000}
+        MaxContainerMemoryMi: {type: integer, minimum: 1, maximum: 1048576}
+        MaxTotalCPUMilli: {type: integer, minimum: 1, maximum: 1000000}
+        MaxTotalMemoryMi: {type: integer, minimum: 1, maximum: 16777216}
+        MaxPostgresStorageMi: {type: integer, minimum: 1, maximum: 16777216}
+        MinMemoryRequestPercent: {type: integer, minimum: 1, maximum: 100}
+        MinTTL: {type: integer, format: int64, minimum: 1}
+        MaxTTL: {type: integer, format: int64, minimum: 1, maximum: 2592000000000000}
+        MaxVisibility: {type: string, enum: [private, org, public]}
+        AllowedSecrets: {type: array, maxItems: 128, items: {type: string, minLength: 1, maxLength: 253}}
+        AllowedRegistries: {type: array, maxItems: 128, items: {type: string, minLength: 1, maxLength: 253}}
+        AllowLargeSize: {type: boolean}
       x-go-type: config.Policy
       x-go-type-import: {path: github.com/heimdall-dev/heimdall/internal/config, name: config}
     ClusterInput:
@@ -368,9 +390,11 @@ components:
         version: {type: string, minLength: 1, maxLength: 64}
     DesiredSnapshot:
       type: object
-      required: [revision, environments, policy]
+      required: [revision, environments, policy, tenantID, tenantSlug]
       properties:
         revision: {type: string}
+        tenantID: {type: string}
+        tenantSlug: {type: string}
         environments: {type: array, items: {$ref: '#/components/schemas/Environment'}}
         policy: {$ref: '#/components/schemas/Policy'}
     StatusUpdate:

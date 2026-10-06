@@ -37,6 +37,21 @@ func journalSession(t *testing.T, stub *journalStub) (context.Context, *session)
 			"metadata": map[string]any{"name": journalName, "namespace": "preview"}}}}
 }
 
+func TestDestroyCanReleaseSameGenerationWithoutOriginalConfig(t *testing.T) {
+	ctx, s := journalSession(t, &journalStub{})
+	s.record.Generation = 4
+	s.record.Digest = "original-deployment"
+	if err := s.begin(ctx, 4, "different-deployment", "apply"); errorCode(err) != "engine.generation_conflict" {
+		t.Fatalf("changed apply inputs accepted: %v", err)
+	}
+	if err := s.begin(ctx, 3, "cleanup-only", "destroy"); errorCode(err) != "engine.stale_generation" {
+		t.Fatalf("stale destroy accepted: %v", err)
+	}
+	if err := s.begin(ctx, 4, "cleanup-only", "destroy"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestStepPreservesLostLeaseCause(t *testing.T) {
 	stub := &journalStub{}
 	work, s := journalSession(t, stub)

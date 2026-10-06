@@ -11,6 +11,7 @@ import (
 	"github.com/heimdall-dev/heimdall/internal/config"
 	"github.com/heimdall-dev/heimdall/internal/engine"
 	"github.com/heimdall-dev/heimdall/internal/render"
+	"github.com/heimdall-dev/heimdall/internal/tracecontext"
 )
 
 // DataLoader returns the bytes of an approved import named by a
@@ -23,6 +24,9 @@ type DataLoader func(ctx context.Context, configMap, key string) ([]byte, error)
 type SpecBuilder struct {
 	// Policy is the tenant policy configs are loaded with (ADR 0006).
 	Policy config.Policy
+	// PolicyFor resolves the current authoritative policy for an API tenant.
+	// A missing policy must fail closed; static sources use Policy instead.
+	PolicyFor func(context.Context, string) (config.Policy, error)
 	// Platform describes this cluster to the renderer.
 	Platform render.Platform
 	// Data resolves spec.data. Nil means imports cannot be resolved; Build
@@ -33,13 +37,46 @@ type SpecBuilder struct {
 // Build returns the engine spec and any config warnings. Errors are Failures.
 func (b SpecBuilder) Build(ctx context.Context, pe *v1alpha1.PreviewEnvironment) (engine.Spec, config.Diagnostics, error) {
 	s := pe.Spec
+	if s.DesiredState == v1alpha1.DesiredDestroyed || !pe.DeletionTimestamp.IsZero() {
+		c := render.Context{Tenant: s.Tenant, Repo: s.Repository, PR: int(s.PullRequest), Generation: s.Generation, EnvironmentID: s.EnvironmentID, Owner: s.Owner, URLSuffix: s.URLSuffix}
+		if _, err := render.CleanupPlan(c); err != nil {
+			return engine.Spec{}, nil, failf(CodeConfigInvalid, false, "invalid cleanup identity")
+		}
+		return engine.Spec{Context: c}, nil, nil
+	}
+	if err := tracecontext.Validate(s.TraceParent); err != nil {
+		return engine.Spec{}, nil, failf(CodeConfigInvalid, false, "invalid bounded trace metadata")
+	}
+	policy := b.Policy
+	if b.PolicyFor != nil {
+		var err error
+		policy, err = b.PolicyFor(ctx, s.Tenant)
+		if err != nil {
+			return engine.Spec{}, nil, failf(CodeConfigInvalid, true, "tenant policy is unavailable")
+		}
+	}
 	sum := sha256.Sum256([]byte(s.Config.Inline))
 	if hex.EncodeToString(sum[:]) != s.Config.SHA256 {
 		return engine.Spec{}, nil, failf(CodeConfigDigest, false, "spec.config.inline does not match spec.config.sha256")
 	}
-	cfg, diags := config.Load(strings.NewReader(s.Config.Inline), b.Policy)
+	cfg, diags := config.Load(strings.NewReader(s.Config.Inline), policy)
 	if cfg == nil {
 		return engine.Spec{}, diags, failf(CodeConfigInvalid, false, "%s", summarize(diags))
+	}
+	if s.Config.Baseline != "" {
+		sum := sha256.Sum256([]byte(s.Config.Baseline))
+		if hex.EncodeToString(sum[:]) != s.Config.BaselineSHA256 {
+			return engine.Spec{}, diags, failf(CodeConfigDigest, false, "baseline digest mismatch")
+		}
+		baseline, diagnostics := config.Load(strings.NewReader(s.Config.Baseline), config.BaselinePolicy())
+		if baseline == nil {
+			return engine.Spec{}, diagnostics, failf(CodeConfigInvalid, false, "baseline config is invalid")
+		}
+		if trust := config.CompareToBaseline(baseline, cfg); trust.Errors() > 0 {
+			return engine.Spec{}, trust, failf(CodeConfigInvalid, false, "%s", summarize(trust))
+		}
+	} else if b.PolicyFor != nil && s.Config.ApprovedBy == "" {
+		return engine.Spec{}, diags, failf(CodeConfigInvalid, false, "no default-branch baseline or explicit maintainer approval")
 	}
 	ctx2 := render.Context{
 		Tenant:        s.Tenant,
@@ -52,7 +89,7 @@ func (b SpecBuilder) Build(ctx context.Context, pe *v1alpha1.PreviewEnvironment)
 		ExpiresAt:     s.ExpiresAt.UTC(),
 		URLSuffix:     s.URLSuffix,
 		Images:        s.Images,
-		Policy:        b.Policy,
+		Policy:        policy,
 		Platform:      b.Platform,
 	}
 	spec := engine.Spec{Config: cfg, Context: ctx2}
@@ -88,9 +125,15 @@ func (b SpecBuilder) Build(ctx context.Context, pe *v1alpha1.PreviewEnvironment)
 // images, bad platform combinations and other render errors before the
 // object is accepted.
 func (b SpecBuilder) Validate(ctx context.Context, pe *v1alpha1.PreviewEnvironment) (config.Diagnostics, error) {
+	if err := tracecontext.Validate(pe.Spec.TraceParent); err != nil {
+		return nil, failf(CodeConfigInvalid, false, "invalid bounded trace metadata")
+	}
 	spec, diags, err := b.Build(ctx, pe)
 	if err != nil {
 		return diags, err
+	}
+	if pe.Spec.DesiredState == v1alpha1.DesiredDestroyed || !pe.DeletionTimestamp.IsZero() {
+		return diags, nil
 	}
 	if _, err := render.Render(spec.Config, spec.Context); err != nil {
 		return diags, failf("engine.spec_invalid", false, "%v", err)

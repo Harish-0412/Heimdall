@@ -27,6 +27,9 @@ import (
 	"github.com/heimdall-dev/heimdall/internal/api/v1alpha1"
 	"github.com/heimdall-dev/heimdall/internal/engine"
 	"github.com/heimdall-dev/heimdall/internal/render"
+	"github.com/heimdall-dev/heimdall/internal/tracecontext"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Finalizer holds a PreviewEnvironment until its resources are verified gone.
@@ -84,6 +87,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 		return ctrl.Result{}, err
 	}
+	ctx = tracecontext.Extract(ctx, pe.Spec.TraceParent)
+	ctx, span := otel.Tracer("heimdall.controller").Start(ctx, "preview.reconcile")
+	defer span.End()
+	span.SetAttributes(attribute.String("tenant", pe.Spec.Tenant), attribute.String("repo", pe.Spec.Repository), attribute.Int64("pr", pe.Spec.PullRequest), attribute.String("env_id", pe.Spec.EnvironmentID), attribute.Int64("generation", pe.Spec.Generation))
 	log := logf.FromContext(ctx).WithValues("tenant", pe.Spec.Tenant, "repo", pe.Spec.Repository,
 		"pr", pe.Spec.PullRequest, "env_id", pe.Spec.EnvironmentID, "generation", pe.Spec.Generation)
 	ctx = logf.IntoContext(ctx, log)
@@ -265,7 +272,7 @@ func (r *Reconciler) start(ctx context.Context, pe *v1alpha1.PreviewEnvironment,
 	setSummaryConditions(st, pe.Generation, true)
 	namespace := render.NamespaceFor(pe.Spec.Repository, int(pe.Spec.PullRequest), pe.Spec.URLSuffix)
 	run := r.operate(key, spec, namespace)
-	r.Runner.Launch(name, key, now, func(ctx context.Context, op Operator) (*engine.Result, error) {
+	r.Runner.LaunchContext(ctx, name, key, now, func(ctx context.Context, op Operator) (*engine.Result, error) {
 		result, err := run(ctx, op)
 		return result, r.explain(ctx, spec, result, err)
 	})

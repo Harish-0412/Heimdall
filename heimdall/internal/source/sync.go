@@ -62,12 +62,26 @@ func (s *Syncer) Sync(ctx context.Context) error {
 	var errs []error
 	for _, env := range snap.Environments {
 		desired[env.Name] = true
+		if prep, ok := s.Source.(interface {
+			Prepare(context.Context, *Environment) error
+		}); ok {
+			if err := prep.Prepare(ctx, &env); err != nil {
+				errs = append(errs, fmt.Errorf("prepare %s: %w", env.Name, err))
+				continue
+			}
+		}
 		u, err := s.object(env)
 		if err == nil {
 			err = s.Client.Apply(ctx, client.ApplyConfigurationFromUnstructured(u), client.FieldOwner(FieldManager), client.ForceOwnership)
 		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("apply %s: %w", env.Name, err))
+		} else if prepared, ok := s.Source.(interface {
+			AfterApply(context.Context, Environment) error
+		}); ok {
+			if err := prepared.AfterApply(ctx, env); err != nil {
+				errs = append(errs, fmt.Errorf("finalize %s: %w", env.Name, err))
+			}
 		}
 	}
 	var list v1alpha1.PreviewEnvironmentList
