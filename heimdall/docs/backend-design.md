@@ -2,16 +2,20 @@
 
 Condensed from the design discussion. Decisions with long-term cost live in
 [ADRs](adr); per-phase detail lives in [phases.md](phases.md).
+The implemented P5/P6 runtime and recovery boundaries are described in
+[control-plane.md](control-plane.md); acceptance status is recorded in the
+[completion review](phase5-6-completion-review.md).
 
 ## Components
 
 | Component | Runs on | Responsibility |
 |---|---|---|
-| `heimdall-webhook` | Lambda + API Gateway | Verify GitHub HMAC, dedupe by delivery id, enqueue. Nothing else. |
+| `heimdall-webhook` | Lambda + API Gateway | Verify bounded raw GitHub HMAC and enqueue; FIFO dedupe is temporary, PostgreSQL owns durable delivery identity. |
 | `heimdall-api` | Container (control namespace) | REST/SSE API, owns PostgreSQL, tenant scoping, audit. Stateless. |
 | `heimdall-orchestrator` | Container | Consumes SQS FIFO; decides deploy/destroy/retry; updates PR comment & checks. |
 | `heimdall-agent` | Every target cluster (customer's own in the product model, ADR 0004) | Outbound-only. Pulls desired state from the API, creates `PreviewEnvironment` CRs, runs the controller + `internal/engine`, sweeper, pushes status. |
-| `heimdall` CLI | Dev machine / CI | `validate`, `render`, `up`, `down`, `reset`, `logs`, `status`. Same engine as the agent. |
+| `heimdall` CLI | Dev machine / CI | `validate`, `render`, `up`, `down`, `reset`, `logs`, `status`, `init`, `build-plan`, `bundle`. Same engine as the agent. |
+| `heimdall-control` | Operator machine / setup container | Migrations, tenant bootstrap, repository registration, credentials and exact sanitised-data attestations. |
 
 ```text
 GitHub -> API GW -> webhook λ -> SQS FIFO (group repo#pr: ordering)
@@ -32,8 +36,10 @@ only narrow (ADR 0006).
 Go; chi + OpenAPI (oapi-codegen); PostgreSQL via pgx + sqlc + goose; SQS FIFO + DLQ;
 controller-runtime with typed client-go objects and server-side apply (Helm only
 ships Heimdall itself, ADR 0007); Gateway API for preview routing (ADR 0008);
-go-github (GitHub App); OpenTelemetry + Prometheus + `slog`; Terraform; kind +
-LocalStack for local development.
+own GitHub App HTTP client with scoped tokens, ETags and retry handling;
+OpenTelemetry + Prometheus + `slog`; kind + LocalStack for local development.
+The P6 ingress and registry-role templates use CloudFormation; the full cloud
+infrastructure modules remain P9 work.
 
 ## Environment state machine
 
@@ -43,6 +49,10 @@ pending -> building -> provisioning -> migrating -> seeding -> testing -> ready
 ready -> resetting -> ready;  ready -> sleeping -> waking -> ready
 any -> destroying -> destroyed
 ```
+
+Sleep/wake remains P8 work and is rejected by the current runtime. A CI build
+reserves a new generation while the preceding committed spec remains intact;
+only a verified current-head callback makes that new deployment executable.
 
 One guarded `Transition()` function; every transition writes an `events` row in the
 same transaction. A new push supersedes the in-flight *deployment*; the

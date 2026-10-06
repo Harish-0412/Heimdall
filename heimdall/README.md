@@ -2,22 +2,33 @@
 
 Secure, disposable, full-stack environments for every pull request.
 
-The planned GitHub workflow is: open PR `#184` and Heimdall builds it, deploys
+The GitHub workflow is: open PR `#184` and Heimdall builds it, deploys
 the whole stack (frontend, API, PostgreSQL, Redis, RabbitMQ, workers) into an
 isolated Kubernetes namespace, initialises its schema, runs smoke tests and
 comments the URL on the PR. Close the PR and everything is destroyed.
 
-> Status: **P0–P4 implemented** — strict configuration, trust policy, secure
-> rendering, the lifecycle engine, in-cluster agent and failure diagnostics.
+> Status: **P0–P5 complete; P6 implemented with live acceptance pending** —
+> configuration, trust policy, secure rendering, lifecycle engine, agent,
+> diagnostics, persistent control plane and GitHub integration.
 > Supply built application images by digest and deploy through the CLI or a
 > `PreviewEnvironment`; `up`, `reset`, `down`, `status`, `logs` and `diagnose`
-> operate on real Kubernetes resources. Automatic GitHub delivery is planned
-> for P5/P6. Defaults contain no synthetic application data.
-> See [docs/phase4-completion-review.md](docs/phase4-completion-review.md),
-> [docs/engine.md](docs/engine.md) and the
-> [roadmap](docs/phases.md).
+> operate on real Kubernetes resources. The outbound agent also accepts API
+> intent. Automatic GitHub delivery requires installing the new own App,
+> configuring the trusted workflow and customer registry, and completing the
+> real repository acceptance test. Defaults contain no synthetic application data.
+> See [the P5/P6 completion review](docs/phase5-6-completion-review.md),
+> [control-plane setup](docs/control-plane.md), [GitHub App setup](docs/github-app-setup.md)
+> and the [roadmap](docs/phases.md).
 
 ## Quick start
+
+The P11 dashboard is available locally in `web/`: run `npm install` and
+`npm run dev`, then open `/dashboard`. It includes a clearly labelled sample
+workspace and an optional live control-plane connection. See the complete
+[component design and implementation plan](docs/dashboard-design.md),
+[first-preview guide](docs/dashboard-quickstart.md) and
+[launch demonstration](docs/launch-demo.md). P11 has started; live launch gates
+remain pending.
 
 Requires Go 1.26+.
 
@@ -55,6 +66,8 @@ step: 08-smoke-run
 | `heimdall force-cleanup --state file --allow-context name --reason text --evidence file` | Administrator-only recovery of a stuck terminating namespace |
 | `heimdall diagnose --state file --allow-context name [--format text\|json\|markdown]` | Explain why a preview failed and what to do ([diagnostics](docs/diagnostics.md)); `--snapshot` diagnoses a saved snapshot |
 | `heimdall manifest [flags] [file]` | Print a `PreviewEnvironment` for the in-cluster agent (`\| kubectl apply -f -`) |
+| `heimdall init --workflow owner/repo/.github/workflows/heimdall-preview.yml@SHA [--out-dir dir]` | Prepare reviewed, immutable workflow onboarding files |
+| `heimdall bundle pack/push [flags]` | Transport declared configuration and attested fixture as a reproducible digest-pinned OCI artifact |
 
 Exit codes: `0` success, `1` invalid config or render input, `2` usage / IO error.
 
@@ -63,13 +76,23 @@ Exit codes: `0` success, `1` invalid config or render input, `2` usage / IO erro
 ```text
 cmd/heimdall/          CLI entrypoint (thin)
 cmd/agent/             in-cluster agent entrypoint (build/agent/Dockerfile)
+cmd/api/               control-plane REST/SSE and outbound agent endpoints
+cmd/orchestrator/      FIFO consumer and durable GitHub notification worker
+cmd/webhook/           signed webhook Lambda ingress
+cmd/control/           operator migration, bootstrap and registration utility
 internal/cli/          command implementations (testable: Run(args, out, err) int)
 internal/config/       heimdall.yaml schema, strict loader, validator, policy, JSON Schema
 internal/render/       Config + Context -> staged, typed Kubernetes objects
 internal/engine/       Reconciliation, operation journal, watches, data lifecycle and pruning
 internal/api/v1alpha1/ PreviewEnvironment CRD types (charts/heimdall-agent/crds is generated)
 internal/controller/   PreviewEnvironment reconciler: async operations, fencing, status
-internal/source/       desired-state sources (cluster, configmap, file) and the syncer
+internal/source/       desired-state sources (API, cluster, configmap, file) and the syncer
+internal/controlapi/   generated HTTP contract, authorization and ephemeral logs
+internal/controlclient/ durable cluster credential rotation and outbound requests
+internal/store/        restricted-role PostgreSQL intent, history, inbox and outbox
+internal/githubapp/    own App credentials, canonical REST reads and OIDC verification
+internal/orchestrator/ canonical PR lifecycle, trust checks and authorized commands
+internal/bundle/       contained OCI configuration and fixture artifacts
 internal/sweeper/      fail-safe orphan removal
 internal/webhook/      admission webhook and its self-managed certificates
 internal/agent/        agent configuration, wiring, access and admission-policy guard
@@ -79,12 +102,13 @@ internal/version/      build metadata injected via -ldflags
 charts/heimdall-agent/ Helm chart that installs the agent (minimal, documented RBAC)
 schema/                generated JSON Schema for heimdall.yaml
 examples/shopflow/     sample config and the runnable ShopFlow demo app
-test/e2e/              kind end-to-end tests: kind (P1), engine (P2), agent (P3), diagnose (P4)
+test/e2e/              kind end-to-end tests: kind (P1), engine (P2), agent (P3), diagnose (P4), control (P5)
+deploy/local/          persistent PostgreSQL, ephemeral Redis and optional own App runtime
+infra/                 webhook FIFO/DLQ ingress and scoped registry IAM templates
 docs/                  design, phases, rendering, engine, agent, diagnostics, ADRs
 ```
 
-Later phases add `cmd/{api,orchestrator,webhook}`, `internal/store`,
-`deploy/`.
+GitHub Actions workflows are at the Git root, `../.github/workflows/`.
 
 ## Development
 
@@ -105,6 +129,10 @@ make build-agent    # build the agent binary
 make docker-agent   # the agent image
 make e2e-agent      # P3 exit criteria: the agent on kind, agent kills, sweeper
 make e2e-diagnose   # P4 exit criteria: all 15 failure scenarios, check each diagnosis
+make build-control  # API, operator, orchestrator and Lambda binaries
+make test-integration # restricted PostgreSQL, ephemeral Redis and real LocalStack FIFO
+make e2e-control    # P5 API-only lifecycle, two-replica agent and recovery on kind
+make generate-api generate-sql # regenerate HTTP and database contracts
 ```
 
 ## Landing page
@@ -126,6 +154,9 @@ browser checks and hosting notes.
 
 - [Backend design](docs/backend-design.md)
 - [Phases and implementation plan](docs/phases.md)
+- [Control plane and agent setup](docs/control-plane.md)
+- [Own GitHub App setup and live acceptance](docs/github-app-setup.md)
+- [P5/P6 completion review](docs/phase5-6-completion-review.md)
 - [heimdall.yaml reference](docs/config-reference.md)
 - [Rendering: what Heimdall creates in the cluster](docs/rendering.md)
 - [Local engine and data lifecycle](docs/engine.md)
