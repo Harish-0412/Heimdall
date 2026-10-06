@@ -1,0 +1,33 @@
+# ShopFlow with a reviewed, synthetic public fixture in the customer OCI bundle.
+version: 1
+services:
+  web:
+    build: {context: examples/shopflow/web}
+    port: 3000
+    public: true
+    primary: true
+    health: {path: /}
+    dependsOn: [api]
+  api:
+    build: {context: examples/shopflow/api}
+    port: 8080
+    health: {path: /health}
+    dependsOn: [postgres, redis, rabbitmq]
+workers:
+  notifications:
+    build: {context: examples/shopflow/api}
+    command: npm run worker
+    dependsOn: [api, postgres, rabbitmq]
+dependencies:
+  postgres: {version: "16", storage: 1Gi, seed: seed.sql}
+  redis: {}
+  rabbitmq: {}
+migrations:
+  service: api
+  command: npm run migrate
+smokeTests:
+  - name: api-health
+    command: curl --fail http://api:8080/health
+  - name: storefront
+    command: curl --fail http://web:3000/
+preview: {ttl: 48h, visibility: private}

@@ -1,0 +1,21 @@
+{
+  "tenant": {"id": "00000000-0000-4000-8000-000000000001", "slug": "harish", "name": "Harish previews"},
+  "actor": "Harish-0412",
+  "policy": {
+    "MaxServices": 8,
+    "MaxWorkers": 8,
+    "MaxContainerCPUMilli": 2000,
+    "MaxContainerMemoryMi": 4096,
+    "MaxTotalCPUMilli": 6000,
+    "MaxTotalMemoryMi": 12288,
+    "MaxPostgresStorageMi": 5120,
+    "MinMemoryRequestPercent": 50,
+    "MinTTL": 3600000000000,
+    "MaxTTL": 604800000000000,
+    "MaxVisibility": "private",
+    "AllowedSecrets": [],
+    "AllowedRegistries": ["123456789012.dkr.ecr.ap-south-1.amazonaws.com/heimdall-preview/"],
+    "AllowLargeSize": false
+  },
+  "quota": {"maxEnvironments": 4, "maxCpuMilli": 24000, "maxMemoryMi": 49152, "maxStorageMi": 20480}
+}

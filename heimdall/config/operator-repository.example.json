@@ -1,0 +1,17 @@
+{
+  "tenant": {"id": "00000000-0000-4000-8000-000000000001", "slug": "harish", "name": "Harish previews"},
+  "actor": "Harish-0412",
+  "installation": {"id": 1, "tenantId": "00000000-0000-4000-8000-000000000001", "account": "Harish-0412", "suspended": false},
+  "repository": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "tenantId": "00000000-0000-4000-8000-000000000001",
+    "githubId": 1230542209,
+    "installationId": 1,
+    "clusterId": "00000000-0000-4000-8000-000000000003",
+    "fullName": "Harish-0412/Startup-Assisstant",
+    "defaultBranch": "main",
+    "enabled": true,
+    "trustedWorkflowRef": "Harish-0412/Heimdall/.github/workflows/heimdall-preview.yml@0000000000000000000000000000000000000000",
+    "trustedWorkflowSha": "0000000000000000000000000000000000000000"
+  }
+}

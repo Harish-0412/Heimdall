@@ -1,0 +1,46 @@
+# Optional local runtime for the newly registered Heimdall App. Supply these
+# file paths through operator environment variables, never in this file.
+services:
+  api:
+    environment:
+      HEIMDALL_GITHUB_APP_ID: ${HEIMDALL_GITHUB_APP_ID:?register the Heimdall App first}
+      HEIMDALL_GITHUB_PRIVATE_KEY_FILE: /run/secrets/github-private-key
+      HEIMDALL_GITHUB_WEBHOOK_SECRET_FILE: /run/secrets/github-webhook-secret
+      HEIMDALL_OIDC_AUDIENCE: ${HEIMDALL_OIDC_AUDIENCE:?exact HTTPS API origin required}
+      HEIMDALL_SQS_URL: http://localstack:4566/queue/us-east-1/000000000000/heimdall.fifo
+      HEIMDALL_SQS_ENDPOINT: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    secrets: [credential-key, github-private-key, github-webhook-secret]
+    depends_on:
+      localstack: {condition: service_healthy}
+  orchestrator:
+    profiles: [github]
+    image: heimdall-control:dev
+    build: {context: ../.., dockerfile: build/control/Dockerfile}
+    entrypoint: [/orchestrator]
+    environment:
+      HEIMDALL_DATABASE_URL: postgres://heimdall_app:local-app-only@postgres:5432/heimdall?sslmode=disable
+      HEIMDALL_CREDENTIAL_KEY_FILE: /run/secrets/credential-key
+      HEIMDALL_GITHUB_APP_ID: ${HEIMDALL_GITHUB_APP_ID:?register the Heimdall App first}
+      HEIMDALL_GITHUB_PRIVATE_KEY_FILE: /run/secrets/github-private-key
+      HEIMDALL_OIDC_AUDIENCE: ${HEIMDALL_OIDC_AUDIENCE:?exact HTTPS API origin required}
+      HEIMDALL_SQS_URL: http://localstack:4566/queue/us-east-1/000000000000/heimdall.fifo
+      HEIMDALL_SQS_ENDPOINT: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    secrets: [credential-key, github-private-key]
+    read_only: true
+    tmpfs: ["/tmp:size=16m,noexec,nosuid"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      postgres: {condition: service_healthy}
+      localstack: {condition: service_healthy}
+secrets:
+  github-private-key:
+    file: ${HEIMDALL_GITHUB_PRIVATE_KEY_PATH:?local downloaded App private-key path required}
+  github-webhook-secret:
+    file: ${HEIMDALL_GITHUB_WEBHOOK_SECRET_PATH:?local webhook secret path required}

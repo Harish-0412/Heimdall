@@ -1,0 +1,62 @@
+name: Trusted Heimdall preview build
+on:
+  workflow_call:
+    inputs:
+      aws-role: {type: string, required: true}
+      aws-region: {type: string, required: true}
+      registry: {type: string, required: true}
+      api-url: {type: string, required: true}
+      platforms: {type: string, default: "linux/amd64"}
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  build:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.id == github.event.repository.id
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # Checkout tooling from the exact commit defining this reusable workflow.
+      # PR code is placed separately and never executed on the host runner.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: trusted
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: trusted/heimdall/go.mod
+      - name: Build the reviewed CLI
+        working-directory: trusted/heimdall
+        run: go build -trimpath -o "$RUNNER_TEMP/heimdall" ./cmd/heimdall
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: application
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.69.3
+          cache: true
+      # AWS trust MUST include repo + pull_request + exact job_workflow_ref in
+      # the custom OIDC sub; repo-only trust lets a PR replace the caller job.
+      - uses: aws-actions/configure-aws-credentials@cabfdba3510de1431bac9dba27511d97497fc100 # v5
+        with:
+          role-to-assume: ${{ inputs.aws-role }}
+          aws-region: ${{ inputs.aws-region }}
+          role-session-name: heimdall-${{ github.run_id }}-${{ github.run_attempt }}
+          unset-current-credentials: true
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
+      - name: Build, scan, deliver immutable digests
+        env:
+          HEIMDALL_CLI: ${{ runner.temp }}/heimdall
+          HEIMDALL_APPLICATION: ${{ github.workspace }}/application
+          HEIMDALL_REGISTRY: ${{ inputs.registry }}
+          HEIMDALL_API_URL: ${{ inputs.api-url }}
+          HEIMDALL_PLATFORMS: ${{ inputs.platforms }}
+          HEIMDALL_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEIMDALL_REPOSITORY_ID: ${{ github.event.repository.id }}
+          HEIMDALL_PR: ${{ github.event.pull_request.number }}
+        run: python3 -I trusted/heimdall/scripts/ci-preview.py

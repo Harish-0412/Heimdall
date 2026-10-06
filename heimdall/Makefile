@@ -11,19 +11,40 @@ ENVTEST_K8S_VERSION ?= 1.37.0
 ENVTEST_DIR ?= $(CURDIR)/out/envtest
 ENVTEST_PKGS ?= ./internal/controller ./internal/api/... ./internal/source
 AGENT_IMAGE ?= heimdall-agent:dev
+CONTROL_IMAGE ?= heimdall-control:dev
+OAPI_CODEGEN_VERSION ?= v2.8.0
+SQLC_VERSION ?= v1.31.1
 # Schemas for CRDs (HTTPRoute) that kubeconform does not ship.
 CRDS_CATALOG  := https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 RENDER_OUT    := out/render
 
 .PHONY: build test cover lint fmt vet tidy validate-examples schema golden \
         render-examples kubeconform helm-lint fuzz e2e-kind e2e-engine ci \
-        build-agent docker-agent generate envtest e2e-agent e2e-diagnose diagnostics-golden
+        build-agent docker-agent generate envtest e2e-agent e2e-diagnose diagnostics-golden \
+        build-control docker-control generate-api generate-sql test-integration e2e-control
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o bin/heimdall ./cmd/heimdall
 
 build-agent:
 	go build -ldflags "$(LDFLAGS)" -o bin/heimdall-agent ./cmd/agent
+
+build-control:
+	go build -ldflags "$(LDFLAGS)" -o bin/heimdall-api ./cmd/api
+	go build -ldflags "$(LDFLAGS)" -o bin/heimdall-control ./cmd/control
+	go build -ldflags "$(LDFLAGS)" -o bin/heimdall-orchestrator ./cmd/orchestrator
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/bootstrap ./cmd/webhook
+
+generate-api:
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION) --config api/oapi-codegen.yaml api/openapi.yaml
+
+generate-sql:
+	go run github.com/sqlc-dev/sqlc/cmd/sqlc@$(SQLC_VERSION) generate
+
+# These tests create real restricted-role PostgreSQL, ephemeral Redis and FIFO
+# SQS containers. They fail if Docker is unavailable; they never silently skip.
+test-integration:
+	go test -tags=integration -race -count=1 -timeout 15m ./internal/store ./internal/controlapi ./internal/orchestrator
 
 test:
 	go test -race ./...
@@ -93,9 +114,10 @@ kubeconform: render-examples
 helm-lint:
 	helm lint --strict charts/heimdall-agent --set platform.baseDomain=preview.example.com
 	mkdir -p $(RENDER_OUT)
-	for source in cluster configmap; do \
+	for source in cluster configmap api; do \
 	  helm template heimdall-agent charts/heimdall-agent --namespace heimdall-system --kube-version $(KUBE_VERSION) \
-	    --set platform.baseDomain=preview.example.com --set source.type=$$source --show-only templates/configmap.yaml | \
+	    --set platform.baseDomain=preview.example.com --set source.type=$$source \
+	    --set source.controlPlane.url=https://api.example.com --set source.controlPlane.clusterID=00000000-0000-4000-8000-000000000001 --show-only templates/configmap.yaml | \
 	    sed -n '/^  agent.yaml: |/,$$p' | sed '1d; s/^    //' > $(RENDER_OUT)/agent-$$source.yaml && \
 	  go run ./cmd/agent --check-config --config $(RENDER_OUT)/agent-$$source.yaml || exit 1; \
 	done
@@ -103,6 +125,9 @@ helm-lint:
 docker-agent:
 	docker build -f build/agent/Dockerfile -t $(AGENT_IMAGE) \
 	  --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) .
+
+docker-control:
+	docker build -f build/control/Dockerfile -t $(CONTROL_IMAGE) .
 
 fuzz:
 	go test ./internal/render -run '^$$' -fuzz '^FuzzNames$$' -fuzztime 30s
@@ -125,5 +150,9 @@ e2e-agent:
 # HEIMDALL_E2E_CAPTURE=1 refreshes internal/diagnose/testdata/scenarios.
 e2e-diagnose:
 	bash test/e2e/diagnose/run.sh
+
+# P5: API-only intent, real outbound agent, timeline, rotation and cleanup.
+e2e-control:
+	bash test/e2e/control/run.sh
 
 ci: vet test envtest validate-examples kubeconform helm-lint

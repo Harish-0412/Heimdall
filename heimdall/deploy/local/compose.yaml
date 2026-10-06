@@ -1,0 +1,67 @@
+name: heimdall-control-local
+services:
+  postgres:
+    image: public.ecr.aws/docker/library/postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: heimdall_owner
+      POSTGRES_PASSWORD: local-operator-only
+      POSTGRES_DB: heimdall
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/roles.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U heimdall_owner -d heimdall"]
+      interval: 3s
+      retries: 20
+  redis:
+    image: public.ecr.aws/docker/library/redis:8.2.2-alpine@sha256:59b6e694653476de2c992937ebe1c64182af4728e54bb49e9b7a6c26614d8933
+    # No RDB, no AOF, no volume: on-demand logs are deliberately ephemeral.
+    command: [redis-server, --save, "", --appendonly, "no", --maxmemory, 64mb, --maxmemory-policy, noeviction]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      retries: 20
+  migrate:
+    profiles: [setup]
+    image: heimdall-control:dev
+    build: {context: ../.., dockerfile: build/control/Dockerfile}
+    entrypoint: [/control, migrate]
+    environment:
+      HEIMDALL_MIGRATION_DATABASE_URL: postgres://heimdall_owner:local-operator-only@postgres:5432/heimdall?sslmode=disable
+    depends_on:
+      postgres: {condition: service_healthy}
+  api:
+    image: heimdall-control:dev
+    build: {context: ../.., dockerfile: build/control/Dockerfile}
+    ports: ["127.0.0.1:8080:8080"]
+    environment:
+      HEIMDALL_DATABASE_URL: postgres://heimdall_app:local-app-only@postgres:5432/heimdall?sslmode=disable
+      HEIMDALL_CREDENTIAL_KEY_FILE: /run/secrets/credential-key
+      HEIMDALL_REDIS_URL: redis://redis:6379/0
+    secrets: [credential-key]
+    read_only: true
+    tmpfs: ["/tmp:size=16m,noexec,nosuid"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+  localstack:
+    profiles: [github]
+    image: public.ecr.aws/localstack/localstack:4.14.0@sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a
+    ports: ["127.0.0.1:4566:4566"]
+    environment:
+      SERVICES: sqs
+      EAGER_SERVICE_LOADING: "1"
+      SQS_ENDPOINT_STRATEGY: path
+    volumes: ["./sqs-init.sh:/etc/localstack/init/ready.d/heimdall.sh:ro"]
+    healthcheck:
+      test: [CMD-SHELL, "awslocal sqs get-queue-url --queue-name heimdall.fifo >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+volumes:
+  database:
+secrets:
+  credential-key:
+    file: ../../out/control-local/credential-key

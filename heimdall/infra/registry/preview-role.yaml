@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Customer-owned preview build role, scoped to exact GitHub workflow identity and ECR prefix.
+Parameters:
+  GitHubOIDCProviderArn: {Type: String}
+  Repository: {Type: String, Description: Exact GitHub owner/repository, AllowedPattern: '[A-Za-z0-9._-]+/[A-Za-z0-9._-]+'}
+  TrustedWorkflow:
+    Type: String
+    Description: Exact owner/repo/.github/workflows/file.yml@reviewed-40-char-SHA
+    AllowedPattern: '[A-Za-z0-9._/-]+@[a-f0-9]{40}'
+  RegistryPrefix:
+    Type: String
+    Default: heimdall-preview
+    AllowedPattern: '[a-z0-9][a-z0-9_./-]*'
+Resources:
+  BuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Federated: !Ref GitHubOIDCProviderArn}
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                # Configure GitHub's custom subject template to include exactly
+                # [repo, context, job_workflow_ref], with use_default=false.
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${Repository}:pull_request:job_workflow_ref:${TrustedWorkflow}'
+      Policies:
+        - PolicyName: preview-registry-only
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action: [ecr:BatchCheckLayerAvailability, ecr:BatchGetImage, ecr:GetDownloadUrlForLayer, ecr:InitiateLayerUpload, ecr:UploadLayerPart, ecr:CompleteLayerUpload, ecr:PutImage]
+                Resource: !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${RegistryPrefix}/*'
+Outputs:
+  PreviewBuildRoleArn: {Value: !GetAtt BuildRole.Arn}

@@ -1,0 +1,20 @@
+{
+  "name": "Heimdall Preview Harish",
+  "description": "Tenant-scoped preview environments, generation-fenced checks and authorized PR lifecycle commands.",
+  "url": "https://YOUR_CONTROL_PLANE_HOST",
+  "hook_attributes": {
+    "url": "https://YOUR_WEBHOOK_HOST/v1/github/webhook",
+    "active": true
+  },
+  "redirect_url": "http://127.0.0.1:8788/github-app/manifest",
+  "public": false,
+  "request_oauth_on_install": false,
+  "default_permissions": {
+    "metadata": "read",
+    "contents": "read",
+    "pull_requests": "write",
+    "checks": "write",
+    "actions": "read"
+  },
+  "default_events": ["pull_request", "issue_comment"]
+}

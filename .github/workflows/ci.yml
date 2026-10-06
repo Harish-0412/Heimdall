@@ -1,0 +1,109 @@
+name: Heimdall verification
+on:
+  push:
+    branches: [main]
+    paths: ["heimdall/**", ".github/workflows/**"]
+  pull_request:
+    paths: ["heimdall/**", ".github/workflows/**"]
+permissions:
+  contents: read
+concurrency:
+  group: heimdall-ci-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    working-directory: heimdall
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with: {go-version-file: heimdall/go.mod, cache-dependency-path: heimdall/go.sum}
+      - run: go mod verify
+      - run: go vet ./...
+      - name: Require the real API server and etcd
+        run: |
+          assets=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.25.2 use 1.37.0 --bin-dir "$RUNNER_TEMP/envtest" -p path)
+          test -n "$assets"
+          echo "KUBEBUILDER_ASSETS=$assets" >> "$GITHUB_ENV"
+      - run: go test -race -coverprofile=coverage.out ./...
+      - run: go run ./cmd/heimdall validate --strict examples/shopflow/heimdall.yaml
+      - name: Generated contracts and fixtures remain reproducible
+        run: |
+          make schema golden diagnostics-golden generate generate-api generate-sql
+          git diff --exit-code -- schema internal/render/testdata internal/diagnose/testdata internal/api charts/heimdall-agent/crds internal/controlapi/gen internal/store/sql
+      - name: Validate trusted workflow tooling
+        run: |
+          python3 -I -m py_compile scripts/ci-preview.py
+          # actionlint 1.7.11 predates these two documented GitHub.com job
+          # identity properties. Ignore only their exact type errors.
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.11 -shellcheck= -pyflakes= -ignore 'property "(workflow_repository|workflow_sha)" is not defined in object type' ../.github/workflows/*.yml
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with: {go-version-file: heimdall/go.mod, cache-dependency-path: heimdall/go.sum}
+      - run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run --timeout 5m
+  manifests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with: {go-version-file: heimdall/go.mod, cache-dependency-path: heimdall/go.sum}
+      - uses: azure/setup-helm@bf6a7d304bc2fdb57e0331155b7ebf2c504acf0a # v4
+        with: {version: v3.22.0}
+      - run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0
+      - run: make helm-lint kubeconform
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - run: docker buildx build --platform linux/amd64,linux/arm64 -f build/agent/Dockerfile .
+      - run: docker buildx build --platform linux/amd64,linux/arm64 -f build/control/Dockerfile .
+  integration:
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with: {go-version-file: heimdall/go.mod, cache-dependency-path: heimdall/go.sum}
+      - run: make test-integration
+  e2e:
+    needs: [test, manifests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: {phase: [kind, engine, agent, diagnose, control]}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with: {go-version-file: heimdall/go.mod, cache-dependency-path: heimdall/go.sum}
+      - uses: azure/setup-helm@bf6a7d304bc2fdb57e0331155b7ebf2c504acf0a
+        with: {version: v3.22.0}
+      - run: go install sigs.k8s.io/kind@v0.33.0
+      - name: Verify the phase exit criterion
+        env: {PHASE: "${{ matrix.phase }}"}
+        run: |
+          set -o pipefail
+          mkdir -p out
+          make "e2e-$PHASE" 2>&1 | tee "out/e2e-$PHASE.log"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with: {name: "evidence-${{ matrix.phase }}", path: heimdall/out/*.log, retention-days: 14}
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with: {go-version-file: heimdall/go.mod, cache-dependency-path: heimdall/go.sum}
+      - run: make fuzz

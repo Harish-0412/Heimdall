@@ -25,6 +25,9 @@ Usage:
 
 Commands:
   validate [file]   Check a heimdall.yaml (default: ./heimdall.yaml)
+  init             Prepare configuration and a pinned GitHub workflow
+  bundle           Pack or push the configuration/approved data OCI artifact
+  build-plan       Print structured CI image build inputs
   render [file]     Print the Kubernetes objects for a preview, stage by stage
   manifest [file]   Print a PreviewEnvironment for the in-cluster agent
   up [file]         Apply a preview using a trusted kube-context
@@ -49,6 +52,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return ExitUsage
 	}
 	switch args[0] {
+	case "init":
+		return runInit(args[1:], stdout, stderr)
+	case "bundle":
+		return runBundle(args[1:], stdout, stderr)
+	case "build-plan":
+		return runBuildPlan(args[1:], stdout, stderr)
 	case "up", "down", "reset", "status", "logs", "force-cleanup":
 		return runEngine(args[0], args[1:], stdout, stderr)
 	case "validate":
