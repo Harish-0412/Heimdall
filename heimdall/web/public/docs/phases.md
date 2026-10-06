@@ -73,7 +73,8 @@ Implements ADR 0006's first slice.
 - `heimdall validate --baseline <default-branch file> <pr file>`.
 - Unit tests for every denial and for allowed application-level changes.
 
-**Still to do in this track:** tenant policy persistence and delivery (P5).
+**Delivered in P5:** tenant policy persistence and outbound delivery to the
+agent's loader and admission path.
 (`requests`, size presets and the JSON Schema export were delivered in P1.)
 
 ---
@@ -464,7 +465,17 @@ actionable message.
 
 ---
 
-## P5 - Control plane: state, API, audit, generation fencing
+## P5 - Control plane: state, API, audit, generation fencing (DONE)
+
+Implementation and recovery details: [control-plane.md](control-plane.md).
+The [P5/P6 completion review](phase5-6-completion-review.md) records acceptance
+evidence and the remaining real GitHub setup requirement.
+
+**Verified:** real PostgreSQL/Redis integration with tenant isolation, credentials,
+CAS, durable history and shared ephemeral logs; Linux Go 1.26 regression with
+race detection and real envtest; API-only lifecycle acceptance on kind with two
+agent replicas, digest-pinned seeded OCI bundles, data-preserving extension,
+first-build failure diagnosis, restart/outage recovery and isolated cleanup.
 
 **Scope**
 - goose migrations + sqlc queries: tenants, installations, repositories,
@@ -484,7 +495,9 @@ actionable message.
   `set_config('app.tenant_id', $1, true)` (`SET LOCAL`) from the authenticated
   principal, never from a request field. Tests prove cross-tenant reads fail,
   including via a missing-context query.
-- Audit log for every mutation; outbox for GitHub/Slack notifications.
+- Audit log for every mutation; durable outbox for GitHub/Slack notifications.
+  P5 provides the infrastructure, P6 the GitHub dispatcher; the Slack adapter
+  remains the post-MVP Slack app in P12.
 - Tenant **policy** storage and delivery to `config.Load` / the admission path.
 
 **Tests:** testcontainers Postgres; state-machine from→to table; RLS adversarial
@@ -495,7 +508,14 @@ environment on a kind cluster running the agent; timeline shows each stage.
 
 ---
 
-## P6 - GitHub integration and the secure CI build contract
+## P6 - GitHub integration and the secure CI build contract (IMPLEMENTED; LIVE ACCEPTANCE PENDING)
+
+The own App client, ingress, FIFO consumer, canonical PR reconciliation,
+authorized commands, edited comment/check outbox, digest callback, OCI bundle
+transport and pinned reusable workflow are implemented and locally tested.
+[github-app-setup.md](github-app-setup.md) prepares a new Heimdall App for the
+authorized repository `Harish-0412/Startup-Assisstant`. This phase is not marked
+DONE until the real-repository exit criterion below runs with that App.
 
 **Scope**
 - GitHub App (permissions: pull_requests, checks, metadata, **contents: read**
@@ -635,7 +655,19 @@ leaves no orphans.
 
 ---
 
-## P11 - Dashboard, onboarding and launch demo
+## P11 - Dashboard, onboarding and launch demo (STARTED)
+
+Frontend design and implementation started at the user's request. The
+`web/` app now includes a preview flight deck, explicit sample workspace,
+same-origin API session, onboarding guide, documentation reader and scripted
+browser rehearsal. The component design and implementation sequence are in
+[dashboard-design.md](dashboard-design.md); setup is in
+[dashboard-quickstart.md](dashboard-quickstart.md) and the live acceptance and
+recording procedure is in [launch-demo.md](launch-demo.md).
+
+This frontend slice does not establish P6 live acceptance or P7–P10 completion.
+The real launch recording and independent under-30-minute onboarding evidence
+remain required before marking P11 complete.
 
 **Scope**
 - Minimal React dashboard (environments, timeline, per-service logs via agent,

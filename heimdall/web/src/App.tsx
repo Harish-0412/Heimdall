@@ -230,7 +230,7 @@ function Demo({ onClose }: { onClose: () => void }) {
             {[
               ["Storefront", "Node.js · port 3000"],
               ["API", "Node.js · port 8080"],
-              ["PostgreSQL", "Isolated database · synthetic seed"],
+              ["PostgreSQL", "Isolated database · approved fixtures"],
               ["Redis", "Private cache"],
               ["RabbitMQ", "Private message broker"],
               ["Notifications", "Background worker"],
@@ -276,8 +276,8 @@ function Docs({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Start with the foundations." onClose={onClose}>
       <p className="modal-intro">
-        The CLI and renderer are available today. Explore the actual project
-        documentation below.
+        The CLI, agent and control plane are available today. Explore the
+        project documentation below.
       </p>
       <div className="doc-links">
         {[
@@ -304,6 +304,24 @@ function Docs({ onClose }: { onClose: () => void }) {
             text: "Stable failure codes, root-cause ranking and what to do next.",
             url: "diagnostics.md",
             icon: Stethoscope,
+          },
+          {
+            title: "Control plane",
+            text: "Persistent history, policy, outbound agent setup and recovery.",
+            url: "control-plane.md",
+            icon: Workflow,
+          },
+          {
+            title: "GitHub App setup",
+            text: "Register the own App, configure trusted builds and run live acceptance.",
+            url: "github-app-setup.md",
+            icon: GitBranch,
+          },
+          {
+            title: "P5 and P6 completion review",
+            text: "Implemented behavior, verification evidence and remaining live setup.",
+            url: "phase5-6-completion-review.md",
+            icon: Check,
           },
           {
             title: "Project roadmap",
@@ -439,6 +457,9 @@ export default function App() {
             </a>
             <a href="#security" onClick={() => setMenuOpen(false)}>
               Security
+            </a>
+            <a href="/dashboard">
+              Dashboard <ArrowUpRight size={13} />
             </a>
             <button
               onClick={() => {
@@ -671,8 +692,8 @@ export default function App() {
               <div className="workflow-note reveal">
                 <GitPullRequest size={16} />
                 <span>
-                  Coming next: automatic environments when PRs open, and cleanup
-                  when they close.
+                  GitHub integration is implemented; App setup enables automatic
+                  previews and cleanup when PRs close.
                 </span>
                 <a href="#roadmap">
                   See the roadmap <ArrowRight size={13} />
@@ -758,7 +779,7 @@ export default function App() {
                     Clearer feedback.
                   </h3>
                   <p>
-                    Run migrations, load synthetic seed data and clone a
+                    Run migrations, load approved sanitised fixtures and clone a
                     baseline database. Each environment starts with a
                     predictable foundation.
                   </p>
@@ -1069,8 +1090,8 @@ export default function App() {
                   </span>
                   <h3>The foundation is here.</h3>
                   <p>
-                    The core config and rendering layers are complete and
-                    runnable.
+                    Configuration, deployment, diagnostics and the control plane
+                    are implemented and runnable.
                   </p>
                   <ul>
                     <li>
@@ -1083,7 +1104,14 @@ export default function App() {
                       <Check size={14} /> Secure, staged Kubernetes rendering
                     </li>
                     <li>
-                      <Check size={14} /> ShopFlow demo & kind end-to-end tests
+                      <Check size={14} /> Lifecycle engine, agent & diagnostics
+                    </li>
+                    <li>
+                      <Check size={14} /> Persistent API, policy & audit history
+                    </li>
+                    <li>
+                      <Check size={14} /> ShopFlow & real cluster acceptance
+                      tests
                     </li>
                   </ul>
                   <button
@@ -1100,25 +1128,26 @@ export default function App() {
                 </article>
                 <article className="roadmap-card roadmap-planned reveal">
                   <span className="tiny-pill">
-                    <GitBranch size={12} /> ON THE ROADMAP
+                    <GitBranch size={12} /> INTEGRATION & NEXT PHASES
                   </span>
                   <h3>The preview lifecycle.</h3>
                   <p>
-                    The next phases connect these foundations into the full
-                    product.
+                    GitHub automation needs the new Heimdall App and a live
+                    repository acceptance run. Later phases add access and cloud
+                    validation.
                   </p>
                   <ul>
                     <li>
-                      <span className="planned-dot" /> Local engine &
-                      environment controller
+                      <Check size={14} /> GitHub lifecycle & trusted build
+                      workflow implemented
                     </li>
                     <li>
-                      <span className="planned-dot" /> GitHub PR automation &
-                      diagnostics
+                      <span className="planned-dot" /> Own App installation &
+                      live GitHub acceptance
                     </li>
                     <li>
                       <span className="planned-dot" /> Authenticated previews &
-                      lifecycle cleanup
+                      automatic TTL management
                     </li>
                     <li>
                       <span className="planned-dot" /> AWS validation &
@@ -1150,23 +1179,23 @@ export default function App() {
                 {[
                   [
                     "What can I use today?",
-                    "The CLI validates heimdall.yaml, compares PR configuration against a baseline, exports JSON Schema and renders staged Kubernetes manifests. The full automatic PR lifecycle is on the roadmap.",
+                    "The CLI validates, renders, deploys and diagnoses previews. The agent reconciles a cluster and the control API stores policy, history and audit records. GitHub automation is implemented and awaits own App setup and live acceptance.",
                   ],
                   [
                     "Do I need an AWS account?",
-                    "No. Start with the CLI without cluster access. The included end-to-end example uses kind locally. EKS validation and the customer-owned cluster integration are planned phases.",
+                    "No. The CLI, agent and control-plane acceptance tests run locally with kind and Docker. The agent connects outbound from a customer cluster. Real EKS security validation comes in later phases.",
                   ],
                   [
                     "Which parts of my stack are supported?",
-                    "The configuration supports frontend and API services, background workers, PostgreSQL, Redis and RabbitMQ, plus migrations, synthetic seed data and smoke tests. Application images are pinned by digest when rendering a deployable plan.",
+                    "The configuration supports frontend and API services, background workers, PostgreSQL, Redis and RabbitMQ, plus migrations, approved sanitised fixtures and smoke tests. Deployable images are pinned by digest.",
                   ],
                   [
                     "How is my preview isolated?",
-                    "The renderer creates a dedicated namespace, restricted pod security, resource quotas and default-deny network policies with explicit allows. A namespace alone is not a hard security boundary for hostile multi-tenant workloads; the roadmap adds customer-owned clusters and further isolation checks.",
+                    "The agent creates a dedicated namespace, restricted pod security, quotas and default-deny network policies. Customer-owned clusters are the deployment model; later phases verify additional isolation and gateway access controls.",
                   ],
                   [
                     "Can I connect production data?",
-                    "Use synthetic seed data or manually approved sanitised fixtures. Heimdall’s design keeps production credentials out of preview workloads. Automated production snapshots are not part of the current implementation.",
+                    "Use schema-only previews or explicitly approved sanitised fixtures bound to their exact hashes. Production credentials stay out of preview workloads. Automated production snapshots are not supported.",
                   ],
                 ].map(([q, a]) => (
                   <details key={q}>

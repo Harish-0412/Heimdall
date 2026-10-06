@@ -148,7 +148,7 @@ test("documentation assets and FAQ disclosures work", async ({ page }) => {
   await expect(dialog).toHaveCount(0);
   await page.getByText("Do I need an AWS account?", { exact: true }).click();
   await expect(page.locator("details[open]")).toContainText(
-    "No. Start with the CLI without cluster access.",
+    "run locally with kind and Docker",
   );
 });
 

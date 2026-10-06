@@ -1,0 +1,448 @@
+openapi: 3.0.3
+info:
+  title: Heimdall Control Plane
+  version: 0.5.0
+  description: Tenant scoped outbound agent protocol. No endpoint connects to Kubernetes.
+servers:
+  - url: https://api.heimdall.example
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      operationId: health
+      security: []
+      responses:
+        '200': {description: Process is alive}
+  /readyz:
+    get:
+      operationId: ready
+      security: []
+      responses:
+        '200': {description: Database is ready}
+        '503': {$ref: '#/components/responses/Error'}
+  /v1/environments:
+    get:
+      operationId: listEnvironments
+      parameters:
+        - {$ref: '#/components/parameters/After'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200': {description: Keyset page, content: {application/json: {schema: {$ref: '#/components/schemas/EnvironmentPage'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: createEnvironment
+      description: Administrator-only manual desired-state override. Members launch previews through canonical GitHub integration; caller-supplied approval identities are discarded.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/CreateEnvironment'}}}
+      responses:
+        '201': {description: Created or replayed desired environment, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/environments/{environmentID}:
+    parameters:
+      - {$ref: '#/components/parameters/EnvironmentID'}
+    get:
+      operationId: getEnvironment
+      responses:
+        '200': {description: Environment, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/environments/{environmentID}/actions:
+    parameters:
+      - {$ref: '#/components/parameters/EnvironmentID'}
+    post:
+      operationId: actEnvironment
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/Action'}}}
+      responses:
+        '200': {description: New desired generation, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/environments/{environmentID}/events:
+    parameters:
+      - {$ref: '#/components/parameters/EnvironmentID'}
+    get:
+      operationId: listEvents
+      parameters:
+        - {$ref: '#/components/parameters/AfterEvent'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200': {description: Chronological keyset timeline, content: {application/json: {schema: {$ref: '#/components/schemas/EventPage'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/environments/{environmentID}/timeline:
+    parameters:
+      - {$ref: '#/components/parameters/EnvironmentID'}
+    get:
+      operationId: streamTimeline
+      parameters:
+        - {$ref: '#/components/parameters/AfterEvent'}
+        - name: Last-Event-ID
+          in: header
+          schema: {type: integer, format: int64, minimum: 0}
+      responses:
+        '200': {description: Authorized resumable SSE; event IDs are durable database IDs, content: {text/event-stream: {schema: {type: string}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/policy:
+    get:
+      operationId: getPolicy
+      responses:
+        '200': {description: Current tenant policy, content: {application/json: {schema: {$ref: '#/components/schemas/Policy'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    put:
+      operationId: setPolicy
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/Policy'}}}
+      responses:
+        '200': {description: Stored administrator policy, content: {application/json: {schema: {$ref: '#/components/schemas/Policy'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/clusters:
+    get:
+      operationId: listClusters
+      responses:
+        '200': {description: Tenant clusters, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Cluster'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      operationId: createCluster
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/ClusterInput'}}}
+      responses:
+        '201': {description: Cluster record, content: {application/json: {schema: {$ref: '#/components/schemas/Cluster'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/clusters/{clusterID}/enrollment:
+    parameters:
+      - {$ref: '#/components/parameters/ClusterID'}
+    post:
+      operationId: enrollCluster
+      responses:
+        '201': {description: One-use short-lived cluster enrollment token, content: {application/json: {schema: {$ref: '#/components/schemas/Enrollment'}}}}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      operationId: revokeCluster
+      responses:
+        '204': {description: All cluster credentials revoked immediately}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/agent/register:
+    post:
+      operationId: registerAgent
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      description: Exchange a single-use enrollment bearer token for a cluster-bound token pair.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/AgentRegistration'}}}
+      responses:
+        '200': {description: Rotatable credentials, content: {application/json: {schema: {$ref: '#/components/schemas/TokenPair'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/agent/refresh:
+    post:
+      operationId: refreshAgent
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      description: Atomically rotate a refresh bearer token. Persist an idempotency key before exchange; the same token and key recover the same successor pair within a bounded two-minute lost-response window. Any other replay is denied.
+      responses:
+        '200': {description: Rotated credentials, content: {application/json: {schema: {$ref: '#/components/schemas/TokenPair'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/agent/heartbeat:
+    post:
+      operationId: heartbeatAgent
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/Heartbeat'}}}
+      responses:
+        '204': {description: Heartbeat stored for authenticated cluster}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/agent/desired:
+    get:
+      operationId: pullDesired
+      responses:
+        '200': {description: 'Complete authoritative desired set for authenticated cluster; any error is unknown, never empty', content: {application/json: {schema: {$ref: '#/components/schemas/DesiredSnapshot'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/agent/environments/{environmentID}/status:
+    parameters:
+      - {$ref: '#/components/parameters/EnvironmentID'}
+    post:
+      operationId: pushStatus
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/StatusUpdate'}}}
+      responses:
+        '200': {description: Current generation accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}
+        '409': {$ref: '#/components/responses/Error'}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/environments/{environmentID}/logs:
+    parameters:
+      - {$ref: '#/components/parameters/EnvironmentID'}
+    post:
+      operationId: requestLogs
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/LogInput'}}}
+      responses:
+        '202': {description: Agent will retrieve a short redacted tail, content: {application/json: {schema: {$ref: '#/components/schemas/LogRequest'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/log-requests/{requestID}:
+    parameters:
+      - {$ref: '#/components/parameters/RequestID'}
+    get:
+      operationId: getLogs
+      responses:
+        '200': {description: Transient response expires and is never persisted as full application logs, content: {application/json: {schema: {$ref: '#/components/schemas/LogRequest'}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/agent/log-requests:
+    get:
+      operationId: pendingLogs
+      responses:
+        '200': {description: Pending requests bound to authenticated cluster, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/LogRequest'}}}}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/agent/log-requests/{requestID}:
+    parameters:
+      - {$ref: '#/components/parameters/RequestID'}
+    post:
+      operationId: completeLogs
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/LogResult'}}}
+      responses:
+        '204': {description: Short redacted response accepted}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/github/webhooks:
+    post:
+      operationId: githubWebhook
+      security: []
+      description: GitHub HMAC authenticated durable delivery inbox.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, additionalProperties: true}}}
+      responses:
+        '202': {description: Authenticated delivery enqueued}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/github/builds:
+    post:
+      operationId: githubBuild
+      description: GitHub Actions OIDC bearer identity; canonical repository, PR, commit and trusted workflow verified before acceptance.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/BuildResult'}}}
+      responses:
+        '202': {description: Current validated digest-only build accepted}
+        default: {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+  parameters:
+    EnvironmentID: {name: environmentID, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 63}}
+    ClusterID: {name: clusterID, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+    RequestID: {name: requestID, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 8, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$'}}
+    After: {name: after, in: query, schema: {type: string, maxLength: 128}}
+    AfterEvent: {name: after, in: query, schema: {type: integer, format: int64, minimum: 0}}
+    Limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+  responses:
+    Error:
+      description: Stable typed public error, correlated by X-Request-ID
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+  schemas:
+    Error:
+      type: object
+      required: [code, message, requestID]
+      additionalProperties: false
+      properties:
+        code: {type: string}
+        message: {type: string}
+        requestID: {type: string}
+    JSON:
+      type: object
+      additionalProperties: true
+      x-go-type: wire.RawMessage
+      x-go-type-import: {path: github.com/heimdall-dev/heimdall/internal/controlapi/wire, name: wire}
+    CreateEnvironment:
+      type: object
+      additionalProperties: false
+      required: [repositoryID, clusterID, name, spec]
+      properties:
+        repositoryID: {type: string, minLength: 1, maxLength: 128}
+        clusterID: {type: string, minLength: 1, maxLength: 128}
+        name: {type: string, minLength: 1, maxLength: 63}
+        spec: {$ref: '#/components/schemas/JSON'}
+    Environment:
+      type: object
+      required: [id, tenantID, repositoryID, clusterID, name, version, generation, resetNonce, desiredState, phase, spec, status, expiresAt, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        tenantID: {type: string}
+        repositoryID: {type: string}
+        clusterID: {type: string}
+        name: {type: string}
+        version: {type: integer, format: int64}
+        generation: {type: integer, format: int64}
+        resetNonce: {type: integer, format: int64}
+        desiredState: {type: string, enum: [Running, Destroyed]}
+        phase: {type: string}
+        spec: {$ref: '#/components/schemas/JSON'}
+        status: {$ref: '#/components/schemas/JSON'}
+        expiresAt: {type: string, format: date-time}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    EnvironmentPage:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Environment'}}
+        next: {type: string}
+    Action:
+      type: object
+      additionalProperties: false
+      required: [action, version]
+      properties:
+        action: {type: string, enum: [retry, reset, delete, extend]}
+        version: {type: integer, format: int64, minimum: 1}
+        expiresAt: {type: string, format: date-time}
+        reason: {type: string, maxLength: 1024}
+    Event:
+      type: object
+      required: [id, environmentID, generation, type, message, createdAt]
+      properties:
+        id: {type: integer, format: int64}
+        environmentID: {type: string}
+        generation: {type: integer, format: int64}
+        type: {type: string}
+        message: {type: string}
+        data: {$ref: '#/components/schemas/JSON'}
+        createdAt: {type: string, format: date-time}
+    EventPage:
+      type: object
+      required: [items, next]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Event'}}
+        next: {type: integer, format: int64}
+    Policy:
+      type: object
+      additionalProperties: false
+      description: Administrator policy. TTL values are integer nanoseconds, matching the Go duration contract. Explicit empty allowlists deny all; null allowlists are rejected.
+      required: [MaxServices, MaxWorkers, MaxContainerCPUMilli, MaxContainerMemoryMi, MaxTotalCPUMilli, MaxTotalMemoryMi, MaxPostgresStorageMi, MinMemoryRequestPercent, MinTTL, MaxTTL, MaxVisibility, AllowedSecrets, AllowedRegistries, AllowLargeSize]
+      properties:
+        MaxServices: {type: integer, minimum: 0, maximum: 16}
+        MaxWorkers: {type: integer, minimum: 0, maximum: 16}
+        MaxContainerCPUMilli: {type: integer, minimum: 1, maximum: 100000}
+        MaxContainerMemoryMi: {type: integer, minimum: 1, maximum: 1048576}
+        MaxTotalCPUMilli: {type: integer, minimum: 1, maximum: 1000000}
+        MaxTotalMemoryMi: {type: integer, minimum: 1, maximum: 16777216}
+        MaxPostgresStorageMi: {type: integer, minimum: 1, maximum: 16777216}
+        MinMemoryRequestPercent: {type: integer, minimum: 1, maximum: 100}
+        MinTTL: {type: integer, format: int64, minimum: 1}
+        MaxTTL: {type: integer, format: int64, minimum: 1, maximum: 2592000000000000}
+        MaxVisibility: {type: string, enum: [private, org, public]}
+        AllowedSecrets: {type: array, maxItems: 128, items: {type: string, minLength: 1, maxLength: 253}}
+        AllowedRegistries: {type: array, maxItems: 128, items: {type: string, minLength: 1, maxLength: 253}}
+        AllowLargeSize: {type: boolean}
+      x-go-type: config.Policy
+      x-go-type-import: {path: github.com/heimdall-dev/heimdall/internal/config, name: config}
+    ClusterInput:
+      type: object
+      additionalProperties: false
+      required: [name, tier]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 63}
+        tier: {type: integer, enum: [0, 1]}
+    Cluster:
+      type: object
+      required: [id, tenantID, name, tier]
+      properties:
+        id: {type: string}
+        tenantID: {type: string}
+        name: {type: string}
+        tier: {type: integer}
+        lastHeartbeat: {type: string, format: date-time}
+    Enrollment:
+      type: object
+      required: [token, expiresAt, clusterID]
+      properties:
+        token: {type: string}
+        expiresAt: {type: string, format: date-time}
+        clusterID: {type: string}
+    AgentRegistration:
+      type: object
+      additionalProperties: false
+      required: [clusterID, version]
+      properties:
+        clusterID: {type: string}
+        version: {type: string, maxLength: 64}
+    TokenPair:
+      type: object
+      required: [accessToken, accessExpiresAt, refreshToken, refreshExpiresAt, clusterID]
+      properties:
+        accessToken: {type: string}
+        accessExpiresAt: {type: string, format: date-time}
+        refreshToken: {type: string}
+        refreshExpiresAt: {type: string, format: date-time}
+        clusterID: {type: string}
+    Heartbeat:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: {type: string, minLength: 1, maxLength: 64}
+    DesiredSnapshot:
+      type: object
+      required: [revision, environments, policy, tenantID, tenantSlug]
+      properties:
+        revision: {type: string}
+        tenantID: {type: string}
+        tenantSlug: {type: string}
+        environments: {type: array, items: {$ref: '#/components/schemas/Environment'}}
+        policy: {$ref: '#/components/schemas/Policy'}
+    StatusUpdate:
+      type: object
+      additionalProperties: false
+      required: [generation, version, phase, status, eventID]
+      properties:
+        generation: {type: integer, format: int64, minimum: 1}
+        version: {type: integer, format: int64, minimum: 1}
+        eventID: {type: string, minLength: 1, maxLength: 128}
+        phase: {type: string, enum: [Pending, Queued, Provisioning, Ready, Degraded, Resetting, Failed, Destroying, Destroyed]}
+        status: {$ref: '#/components/schemas/JSON'}
+    LogInput:
+      type: object
+      additionalProperties: false
+      required: [workload]
+      properties:
+        workload: {type: string, minLength: 1, maxLength: 63, pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'}
+        tail: {type: integer, minimum: 1, maximum: 200, default: 100}
+    LogRequest:
+      type: object
+      required: [id, environmentID, generation, workload, tail, state, expiresAt]
+      properties:
+        id: {type: string}
+        environmentID: {type: string}
+        generation: {type: integer, format: int64}
+        workload: {type: string}
+        tail: {type: integer}
+        state: {type: string, enum: [pending, completed, failed]}
+        expiresAt: {type: string, format: date-time}
+        text: {type: string, maxLength: 16384}
+        error: {type: string, maxLength: 256}
+    LogResult:
+      type: object
+      additionalProperties: false
+      required: [generation, redacted]
+      properties:
+        generation: {type: integer, format: int64, minimum: 1}
+        redacted: {type: boolean, enum: [true]}
+        text: {type: string, maxLength: 16384}
+        error: {type: string, maxLength: 256}
+    BuildResult:
+      type: object
+      additionalProperties: false
+      required: [repositoryID, pullRequest, commit, bundle, images]
+      properties:
+        repositoryID: {type: integer, format: int64, minimum: 1}
+        pullRequest: {type: integer, format: int64, minimum: 1}
+        commit: {type: string, pattern: '^([0-9a-f]{40}|[0-9a-f]{64})$'}
+        bundle: {type: string, maxLength: 1024}
+        images: {type: object, maxProperties: 16, additionalProperties: {type: string}}
