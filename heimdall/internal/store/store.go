@@ -13,15 +13,24 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
 	"github.com/heimdall-dev/heimdall/db/migrations"
 	"github.com/heimdall-dev/heimdall/internal/domain"
+	queries "github.com/heimdall-dev/heimdall/internal/store/sql"
 )
 
-type Store struct{ pool *pgxpool.Pool }
+type Store struct {
+	pool          *pgxpool.Pool
+	credentialKey []byte
+}
+
+// Options supplies process secrets separately from tenant data. The same random
+// key must be available to every API replica and retained across restarts.
+type Options struct{ CredentialDerivationKey []byte }
 
 // Migrate requires an operator/migration credential. New rejects that role for
 // application traffic; migrations are deliberately separate from API startup.
@@ -40,11 +49,17 @@ func Migrate(ctx context.Context, dsn string) error {
 }
 
 func New(ctx context.Context, dsn string) (*Store, error) {
+	return NewWithOptions(ctx, dsn, Options{})
+}
+func NewWithOptions(ctx context.Context, dsn string, options Options) (*Store, error) {
+	if len(options.CredentialDerivationKey) != 0 && len(options.CredentialDerivationKey) < 32 {
+		return nil, errors.New("credential derivation key must contain at least 32 random bytes")
+	}
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{pool: pool}
+	s := &Store{pool: pool, credentialKey: append([]byte(nil), options.CredentialDerivationKey...)}
 	if err = s.verifyRole(ctx); err != nil {
 		pool.Close()
 		return nil, err
@@ -69,17 +84,20 @@ func validatePrincipal(p domain.Principal) error {
 		return domain.ErrUnauthorized
 	}
 	switch p.Role {
-	case "admin", "member", "agent", "ci", "system":
+	case "admin", "member", "viewer", "agent", "ci", "system":
 	default:
 		return domain.ErrUnauthorized
 	}
 	return nil
 }
 func (s *Store) begin(ctx context.Context, p domain.Principal) (pgx.Tx, error) {
+	return s.beginOptions(ctx, p, pgx.TxOptions{})
+}
+func (s *Store) beginOptions(ctx context.Context, p domain.Principal, options pgx.TxOptions) (pgx.Tx, error) {
 	if err := validatePrincipal(p); err != nil {
 		return nil, err
 	}
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := s.pool.BeginTx(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -123,32 +141,29 @@ func translate(err error) error {
 	return err
 }
 func raw(value any) json.RawMessage { data, _ := json.Marshal(value); return data }
+func dbUUID(id string) pgtype.UUID {
+	parsed, err := uuid.Parse(id)
+	return pgtype.UUID{Bytes: parsed, Valid: err == nil}
+}
 func audit(ctx context.Context, tx pgx.Tx, p domain.Principal, action, resource string, metadata any) error {
-	_, err := tx.Exec(ctx, `INSERT INTO heimdall.audit_log(tenant_id,actor_id,action,resource,metadata) VALUES($1,$2,$3,$4,$5)`, p.TenantID, p.ActorID, action, resource, raw(metadata))
-	return err
+	return queries.New(tx).InsertAudit(ctx, queries.InsertAuditParams{TenantID: dbUUID(p.TenantID), ActorID: p.ActorID, Action: action, Resource: resource, Metadata: raw(metadata)})
 }
 func revision(ctx context.Context, tx pgx.Tx, p domain.Principal) error {
 	_, err := tx.Exec(ctx, `UPDATE heimdall.tenant_policy SET desired_revision=desired_revision+1 WHERE tenant_id=$1`, p.TenantID)
 	return err
 }
 func event(ctx context.Context, tx pgx.Tx, p domain.Principal, e domain.Environment, kind string, payload any, sourceID string) error {
-	var source any
-	if sourceID != "" {
-		source = sourceID
-	}
-	_, err := tx.Exec(ctx, `INSERT INTO heimdall.events(tenant_id,environment_id,generation,kind,payload,source_event_id) VALUES($1,$2,$3,$4,$5,$6)`, p.TenantID, e.ID, e.Generation, kind, raw(payload), source)
-	return err
+	return queries.New(tx).InsertEvent(ctx, queries.InsertEventParams{TenantID: dbUUID(p.TenantID), EnvironmentID: e.ID, Generation: e.Generation, Kind: kind, Payload: raw(payload), SourceEventID: pgtype.Text{String: sourceID, Valid: sourceID != ""}})
 }
 func notify(ctx context.Context, tx pgx.Tx, p domain.Principal, e domain.Environment) error {
-	_, err := tx.Exec(ctx, `INSERT INTO heimdall.outbox(tenant_id,environment_id,generation,kind,payload) VALUES($1,$2,$3,'github.preview',$4)`, p.TenantID, e.ID, e.Generation, raw(map[string]any{"environmentId": e.ID, "generation": e.Generation}))
-	return err
+	return queries.New(tx).InsertOutbox(ctx, queries.InsertOutboxParams{TenantID: dbUUID(p.TenantID), EnvironmentID: pgtype.Text{String: e.ID, Valid: true}, Generation: e.Generation, Kind: "github.preview", Payload: raw(map[string]any{"environmentId": e.ID, "generation": e.Generation})})
 }
 func (s *Store) AppendAudit(ctx context.Context, p domain.Principal, action, resource string, metadata json.RawMessage) error {
 	tx, err := s.begin(ctx, p)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err = audit(ctx, tx, p, action, resource, metadata); err != nil {
 		return err
 	}
@@ -167,7 +182,7 @@ func ProvisionTenant(ctx context.Context, dsn string, t domain.Tenant, policy js
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if t.ID == "" {
 		t.ID = uuid.NewString()
 	}
@@ -235,7 +250,7 @@ func (s *Store) GetEnvironment(ctx context.Context, p domain.Principal, id strin
 	if err != nil {
 		return domain.Environment{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	e, err := getEnvironment(ctx, tx, id, false)
 	if err == nil {
 		err = checkEnvironment(p, e)
@@ -247,7 +262,7 @@ func (s *Store) GetEnvironmentByPR(ctx context.Context, p domain.Principal, repo
 	if err != nil {
 		return domain.Environment{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	e, err := scanEnvironment(tx.QueryRow(ctx, `SELECT `+environmentColumns+` FROM heimdall.environments WHERE repository_id=$1 AND pull_request=$2`, repoID, number))
 	if err == nil {
 		err = checkEnvironment(p, e)
@@ -268,7 +283,7 @@ func (s *Store) ListEnvironments(ctx context.Context, p domain.Principal, page d
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if p.Role == "agent" {
 		page.ClusterID = p.ClusterID
 		if page.ClusterID == "" {
@@ -295,7 +310,7 @@ func (s *Store) Timeline(ctx context.Context, p domain.Principal, id string, aft
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	e, err := getEnvironment(ctx, tx, id, false)
 	if err != nil {
 		return nil, err

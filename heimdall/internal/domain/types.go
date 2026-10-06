@@ -4,8 +4,9 @@ package domain
 import (
 	"encoding/json"
 	"errors"
-	"github.com/heimdall-dev/heimdall/internal/config"
 	"time"
+
+	"github.com/heimdall-dev/heimdall/internal/config"
 )
 
 var (
@@ -97,9 +98,20 @@ type DeployInput struct {
 }
 type Action struct {
 	Kind       string     `json:"kind"`
+	Reason     string     `json:"reason,omitempty"`
 	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
 	DeliveryID string     `json:"-"`
 	LeaseToken string     `json:"-"`
+}
+type DataAttestation struct {
+	RepositoryID string    `json:"repositoryId"`
+	PullRequest  int64     `json:"pullRequest"`
+	ConfigSHA256 string    `json:"configSha256"`
+	SeedSHA256   string    `json:"seedSha256"`
+	ApprovedBy   string    `json:"approvedBy"`
+	Reason       string    `json:"reason"`
+	Sanitised    bool      `json:"sanitised"`
+	ExpiresAt    time.Time `json:"expiresAt"`
 }
 type StatusUpdate struct {
 	Generation int64           `json:"generation"`
@@ -217,6 +229,9 @@ type PullRequest struct {
 	State                        string
 	Fork                         bool
 	UpdatedAt                    time.Time
+	ObservedAt                   time.Time
+	Version                      int64
+	TraceParent                  string
 	ApprovedSHA                  string
 	BaseSHA                      string
 	NeedsApproval                bool
@@ -228,6 +243,10 @@ type PullRequestObservation struct {
 	HeadSHA, BaseSHA, State, Owner                       string
 	IsFork, NeedsApproval                                bool
 	ConfigDigest, BaselineDigest, DeliveryID, LeaseToken string
+	Message                                              string
+	UpdatedAt                                            time.Time
+	ExpectedVersion                                      int64
+	TraceParent                                          string
 }
 type BuildInput struct {
 	RepositoryID                                     string
@@ -235,6 +254,7 @@ type BuildInput struct {
 	HeadSHA, Bundle                                  string
 	Images                                           map[string]string
 	ConfigDigest, BaselineDigest, RunID, WorkflowRef string
+	PolicySHA256                                     string
 	RunAttempt                                       int64
 	Spec                                             json.RawMessage
 	ExpiresAt                                        time.Time

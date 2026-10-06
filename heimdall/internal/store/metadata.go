@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/heimdall-dev/heimdall/internal/config"
 	"github.com/heimdall-dev/heimdall/internal/domain"
+	queries "github.com/heimdall-dev/heimdall/internal/store/sql"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -17,23 +18,21 @@ func (s *Store) GetTenant(ctx context.Context, p domain.Principal) (domain.Tenan
 	if err != nil {
 		return domain.Tenant{}, err
 	}
-	defer tx.Rollback(ctx)
-	var t domain.Tenant
-	err = tx.QueryRow(ctx, `SELECT id::text,slug,name FROM heimdall.tenants WHERE id=$1`, p.TenantID).Scan(&t.ID, &t.Slug, &t.Name)
-	return t, translate(err)
+	defer func() { _ = tx.Rollback(ctx) }()
+	t, err := queries.New(tx).GetTenant(ctx, dbUUID(p.TenantID))
+	return domain.Tenant{ID: t.ID, Slug: t.Slug, Name: t.Name}, translate(err)
 }
 func (s *Store) GetPolicy(ctx context.Context, p domain.Principal) (config.Policy, error) {
 	tx, err := s.begin(ctx, p)
 	if err != nil {
 		return config.Policy{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	return getPolicy(ctx, tx, p)
 }
 func getPolicy(ctx context.Context, tx pgx.Tx, p domain.Principal) (config.Policy, error) {
-	var data []byte
 	var policy config.Policy
-	err := tx.QueryRow(ctx, `SELECT policy FROM heimdall.tenant_policy WHERE tenant_id=$1`, p.TenantID).Scan(&data)
+	data, err := queries.New(tx).GetPolicy(ctx, dbUUID(p.TenantID))
 	if err != nil {
 		return policy, translate(err)
 	}
@@ -59,7 +58,7 @@ func (s *Store) SetPolicy(ctx context.Context, p domain.Principal, policy config
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	_, err = tx.Exec(ctx, `UPDATE heimdall.tenant_policy SET policy=$2,version=version+1,desired_revision=desired_revision+1,updated_at=now() WHERE tenant_id=$1`, p.TenantID, raw(policy))
 	if err != nil {
 		return err
@@ -94,7 +93,7 @@ func (s *Store) CreateCluster(ctx context.Context, p domain.Principal, c domain.
 	if err != nil {
 		return c, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	c, err = scanCluster(tx.QueryRow(ctx, `INSERT INTO heimdall.clusters(id,tenant_id,name,tier) VALUES($1,$2,$3,$4) RETURNING `+clusterColumns, c.ID, p.TenantID, c.Name, c.Tier))
 	if err != nil {
 		return c, err
@@ -112,7 +111,7 @@ func (s *Store) GetCluster(ctx context.Context, p domain.Principal, id string) (
 	if err != nil {
 		return domain.Cluster{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	return scanCluster(tx.QueryRow(ctx, `SELECT `+clusterColumns+` FROM heimdall.clusters WHERE id=$1`, id))
 }
 func (s *Store) ListClusters(ctx context.Context, p domain.Principal) ([]domain.Cluster, error) {
@@ -120,7 +119,7 @@ func (s *Store) ListClusters(ctx context.Context, p domain.Principal) ([]domain.
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	rows, err := tx.Query(ctx, `SELECT `+clusterColumns+` FROM heimdall.clusters WHERE ($1='' OR id::text=$1) ORDER BY id`, p.ClusterID)
 	if err != nil {
 		return nil, err
@@ -147,7 +146,7 @@ func (s *Store) Heartbeat(ctx context.Context, p domain.Principal, agentVersion 
 	if err != nil {
 		return domain.Cluster{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	c, err := scanCluster(tx.QueryRow(ctx, `UPDATE heimdall.clusters SET last_heartbeat=now(),agent_version=$2 WHERE id=$1 RETURNING `+clusterColumns, p.ClusterID, agentVersion))
 	if err != nil {
 		return c, err
@@ -168,7 +167,7 @@ func (s *Store) PutInstallation(ctx context.Context, p domain.Principal, i domai
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	_, err = tx.Exec(ctx, `INSERT INTO heimdall.installations(id,tenant_id,account,suspended) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO UPDATE SET account=EXCLUDED.account,suspended=EXCLUDED.suspended`, i.ID, p.TenantID, i.Account, i.Suspended)
 	if err != nil {
 		return translate(err)
@@ -192,7 +191,7 @@ func (s *Store) PutRepository(ctx context.Context, p domain.Principal, r domain.
 	if err != nil {
 		return r, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	_, err = tx.Exec(ctx, `INSERT INTO heimdall.repositories(id,tenant_id,github_id,installation_id,cluster_id,full_name,default_branch,enabled,trusted_workflow_ref,trusted_workflow_sha) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(id) DO UPDATE SET enabled=EXCLUDED.enabled,default_branch=EXCLUDED.default_branch,trusted_workflow_ref=EXCLUDED.trusted_workflow_ref,trusted_workflow_sha=EXCLUDED.trusted_workflow_sha WHERE heimdall.repositories.github_id=EXCLUDED.github_id AND heimdall.repositories.cluster_id=EXCLUDED.cluster_id AND heimdall.repositories.installation_id=EXCLUDED.installation_id`, r.ID, p.TenantID, r.GitHubID, r.InstallationID, r.ClusterID, r.FullName, r.DefaultBranch, r.Enabled, r.TrustedWorkflowRef, r.TrustedWorkflowSHA)
 	if err != nil {
 		return r, translate(err)
@@ -216,7 +215,7 @@ func (s *Store) GetRepository(ctx context.Context, p domain.Principal, id string
 	if err != nil {
 		return domain.Repository{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	return scanRepository(tx.QueryRow(ctx, `SELECT `+repositoryColumns+` FROM heimdall.repositories WHERE id=$1`, id))
 }
 func (s *Store) RepositoryByGitHubID(ctx context.Context, p domain.Principal, id int64) (domain.Repository, error) {
@@ -224,7 +223,7 @@ func (s *Store) RepositoryByGitHubID(ctx context.Context, p domain.Principal, id
 	if err != nil {
 		return domain.Repository{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	return scanRepository(tx.QueryRow(ctx, `SELECT `+repositoryColumns+` FROM heimdall.repositories WHERE github_id=$1`, id))
 }
 func (s *Store) Snapshot(ctx context.Context, p domain.Principal) (domain.DesiredSnapshot, error) {
@@ -232,14 +231,11 @@ func (s *Store) Snapshot(ctx context.Context, p domain.Principal) (domain.Desire
 	if p.Role != "agent" || p.ClusterID == "" {
 		return snap, domain.ErrForbidden
 	}
-	tx, err := s.begin(ctx, p)
+	tx, err := s.beginOptions(ctx, p, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return snap, err
 	}
-	defer tx.Rollback(ctx)
-	if _, err = tx.Exec(ctx, `SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`); err != nil {
-		return snap, err
-	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	snap.Policy, err = getPolicy(ctx, tx, p)
 	if err != nil {
 		return snap, err
@@ -271,7 +267,7 @@ func (s *Store) DesiredRevision(ctx context.Context, p domain.Principal) (int64,
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var value int64
 	err = tx.QueryRow(ctx, `SELECT desired_revision FROM heimdall.tenant_policy WHERE tenant_id=$1`, p.TenantID).Scan(&value)
 	return value, translate(err)
@@ -281,7 +277,7 @@ func (s *Store) GetQuota(ctx context.Context, p domain.Principal) (domain.Quota,
 	if err != nil {
 		return domain.Quota{}, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	var q domain.Quota
 	err = tx.QueryRow(ctx, `SELECT max_environments,max_cpu_milli,max_memory_mi,max_storage_mi FROM heimdall.quotas WHERE tenant_id=$1`, p.TenantID).Scan(&q.MaxEnvironments, &q.MaxCPUMilli, &q.MaxMemoryMi, &q.MaxStorageMi)
 	return q, translate(err)
@@ -294,7 +290,7 @@ func (s *Store) SetQuota(ctx context.Context, p domain.Principal, q domain.Quota
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	_, err = tx.Exec(ctx, `UPDATE heimdall.quotas SET max_environments=$2,max_cpu_milli=$3,max_memory_mi=$4,max_storage_mi=$5 WHERE tenant_id=$1`, p.TenantID, q.MaxEnvironments, q.MaxCPUMilli, q.MaxMemoryMi, q.MaxStorageMi)
 	if err != nil {
 		return err

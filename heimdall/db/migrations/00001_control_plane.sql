@@ -46,7 +46,7 @@ CREATE TABLE heimdall.pull_requests (
   tenant_id uuid NOT NULL, repository_id uuid NOT NULL, number bigint NOT NULL CHECK(number > 0), head_sha text NOT NULL,
   base_sha text NOT NULL DEFAULT '', state text NOT NULL CHECK(state IN ('open','closed','refused')),
   is_fork boolean NOT NULL DEFAULT false, needs_approval boolean NOT NULL DEFAULT false, approved_sha text NOT NULL DEFAULT '',
-  config_digest text NOT NULL DEFAULT '', baseline_digest text NOT NULL DEFAULT '', updated_at timestamptz NOT NULL DEFAULT now(),
+  config_digest text NOT NULL DEFAULT '', baseline_digest text NOT NULL DEFAULT '', observed_at timestamptz NOT NULL DEFAULT 'epoch', version bigint NOT NULL DEFAULT 1 CHECK(version>0), updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY(tenant_id,repository_id,number), FOREIGN KEY(tenant_id,repository_id) REFERENCES heimdall.repositories(tenant_id,id)
 );
 CREATE TABLE heimdall.environments (
@@ -104,8 +104,10 @@ CREATE TABLE heimdall.audit_log (
 );
 CREATE TABLE heimdall.credentials (
   id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES heimdall.tenants(id), actor_id text NOT NULL, cluster_id uuid,
-  role text NOT NULL CHECK(role IN ('admin','member','agent','ci','system')), kind text NOT NULL CHECK(kind IN ('user','access','refresh','enrollment','ci')),
+  role text NOT NULL CHECK(role IN ('admin','member','viewer','agent','ci','system')), kind text NOT NULL CHECK(kind IN ('user','access','refresh','enrollment','ci')),
   token_hash bytea NOT NULL UNIQUE CHECK(octet_length(token_hash) = 32), expires_at timestamptz NOT NULL, revoked_at timestamptz,
+  rotation_nonce_hash bytea CHECK(rotation_nonce_hash IS NULL OR octet_length(rotation_nonce_hash)=32),
+  successor_access uuid, successor_refresh uuid, replay_until timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(), FOREIGN KEY(tenant_id,cluster_id) REFERENCES heimdall.clusters(tenant_id,id)
 );
 CREATE INDEX credentials_cluster ON heimdall.credentials(tenant_id,cluster_id);
@@ -135,10 +137,26 @@ CREATE TABLE heimdall.github_delivery_state (
   tenant_id uuid NOT NULL, environment_id text NOT NULL, generation bigint NOT NULL, comment_id bigint NOT NULL DEFAULT 0, check_id bigint NOT NULL DEFAULT 0,
   updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(tenant_id,environment_id), FOREIGN KEY(tenant_id,environment_id) REFERENCES heimdall.environments(tenant_id,id)
 );
+CREATE TABLE heimdall.build_receipts (
+  tenant_id uuid NOT NULL, repository_id uuid NOT NULL, pull_request bigint NOT NULL,
+  run_id text NOT NULL, run_attempt bigint NOT NULL CHECK(run_attempt > 0), request_hash bytea NOT NULL CHECK(octet_length(request_hash)=32),
+  environment_id text NOT NULL, generation bigint NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(tenant_id,repository_id,run_id,run_attempt),
+  FOREIGN KEY(tenant_id,repository_id) REFERENCES heimdall.repositories(tenant_id,id),
+  FOREIGN KEY(tenant_id,environment_id) REFERENCES heimdall.environments(tenant_id,id)
+);
+CREATE TABLE heimdall.data_attestations (
+ tenant_id uuid NOT NULL, repository_id uuid NOT NULL, pull_request bigint NOT NULL CHECK(pull_request>0),
+ config_sha256 text NOT NULL CHECK(config_sha256 ~ '^[a-f0-9]{64}$'), seed_sha256 text NOT NULL CHECK(seed_sha256 ~ '^[a-f0-9]{64}$'),
+ approved_by text NOT NULL CHECK(length(approved_by) BETWEEN 1 AND 200), reason text NOT NULL CHECK(length(reason) BETWEEN 1 AND 1024),
+ sanitised boolean NOT NULL CHECK(sanitised), expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_id,repository_id,pull_request,config_sha256,seed_sha256),
+ FOREIGN KEY(tenant_id,repository_id) REFERENCES heimdall.repositories(tenant_id,id)
+);
 
 -- +goose StatementBegin
 DO $$ DECLARE item text; col text; BEGIN
-  FOREACH item IN ARRAY ARRAY['tenants','tenant_policy','clusters','installations','repositories','pull_requests','environments','deployments','events','diagnoses','smoke_runs','quotas','usage_samples','audit_log','credentials','idempotency_keys','webhook_deliveries','outbox','github_delivery_state'] LOOP
+  FOREACH item IN ARRAY ARRAY['tenants','tenant_policy','clusters','installations','repositories','pull_requests','environments','deployments','events','diagnoses','smoke_runs','quotas','usage_samples','audit_log','credentials','idempotency_keys','webhook_deliveries','outbox','github_delivery_state','build_receipts','data_attestations'] LOOP
     col := CASE WHEN item = 'tenants' THEN 'id' ELSE 'tenant_id' END;
     EXECUTE format('ALTER TABLE heimdall.%I ENABLE ROW LEVEL SECURITY', item);
     EXECUTE format('ALTER TABLE heimdall.%I FORCE ROW LEVEL SECURITY', item);
@@ -149,7 +167,7 @@ END $$;
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA heimdall TO heimdall_app;
 REVOKE ALL ON heimdall.tenant_routes, heimdall.installation_routes FROM heimdall_app;
 REVOKE INSERT, UPDATE ON heimdall.tenants FROM heimdall_app;
-REVOKE UPDATE ON heimdall.deployments, heimdall.events, heimdall.audit_log, heimdall.usage_samples FROM heimdall_app;
+REVOKE UPDATE ON heimdall.deployments, heimdall.events, heimdall.audit_log, heimdall.usage_samples, heimdall.build_receipts FROM heimdall_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA heimdall TO heimdall_app;
 -- +goose StatementBegin
 CREATE FUNCTION heimdall.resolve_installation(target bigint) RETURNS uuid

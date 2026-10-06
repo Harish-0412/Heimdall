@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // Policy is the set of hard rules a config must satisfy. It comes from outside
 // the pull request (tenant settings held by the control plane; DefaultPolicy for
 // local use), so a PR author can never edit their own ceiling. See ADR 0006.
@@ -32,6 +34,16 @@ type Policy struct {
 // tenant policy is supplied. Production callers pass the tenant's policy.
 func DefaultPolicy() Policy {
 	return Policy{Limits: DefaultLimits(), MaxVisibility: VisibilityPublic, AllowLargeSize: true}
+}
+
+// BaselinePolicy parses a protected default-branch trust ceiling independently
+// of a later tenant-policy reduction. It never authorizes a deployment: the PR
+// must separately load under the current explicit tenant policy. These limits
+// match the largest bounded policy the control API can accept.
+func BaselinePolicy() Policy {
+	return Policy{Limits: Limits{MaxServices: 16, MaxWorkers: 16, MaxContainerCPUMilli: 100000, MaxContainerMemoryMi: 1 << 20,
+		MaxTotalCPUMilli: 1000000, MaxTotalMemoryMi: 1 << 24, MaxPostgresStorageMi: 1 << 24, MinMemoryRequestPercent: 0,
+		MinTTL: time.Second, MaxTTL: 30 * 24 * time.Hour}, MaxVisibility: VisibilityPublic, AllowLargeSize: true}
 }
 
 // visibilityRank orders visibilities from most to least restrictive.
