@@ -318,6 +318,19 @@ func TestRender_NetworkPolicies(t *testing.T) {
 	if gw.Spec.Ingress[0].Ports[0].Port.IntValue() != 3000 || gw.Spec.PodSelector.MatchLabels[labelName] != "web" {
 		t.Errorf("gateway policy must admit only web's port: %+v", gw.Spec)
 	}
+	// An empty peer list must not render as an empty from/to, which
+	// Kubernetes reads as "every peer".
+	cfg := loadString(t, minimalSrc)
+	ctx := testContext(t, cfg)
+	ctx.Platform.IngressPeers, ctx.Platform.DNSPeers = []networkingv1.NetworkPolicyPeer{}, []networkingv1.NetworkPolicyPeer{}
+	p := mustRender(t, cfg, ctx)
+	for _, name := range []string{"heimdall-allow-gateway-app", policyDNS} {
+		np := find[*networkingv1.NetworkPolicy](p, name)
+		if len(np.Spec.Ingress) > 0 && len(np.Spec.Ingress[0].From) == 0 || len(np.Spec.Egress) > 0 && len(np.Spec.Egress[0].To) == 0 {
+			t.Errorf("%s allows every peer: %+v", name, np.Spec)
+		}
+	}
+
 	if got := metadataExcepts("0.0.0.0/0"); !slices.Equal(got, []string{"169.254.0.0/16"}) {
 		t.Errorf("excepts(0.0.0.0/0) = %v", got)
 	}
@@ -336,7 +349,7 @@ func TestRender_StagesAndSteps(t *testing.T) {
 	}
 	want := []string{
 		"guardrails/setup", "dependencies/start",
-		"baseline-db/prepare", "baseline-db/migrate", "baseline-db/seed", "baseline-db/clone",
+		"baseline-db/prepare", "baseline-db/migrate", "baseline-db/clone",
 		"application/wave-1", "application/wave-2", "smoke/run",
 	}
 	if !slices.Equal(steps, want) {
@@ -407,7 +420,7 @@ func TestEncode(t *testing.T) {
 			t.Errorf("file %q is badly named or out of order", f.Name)
 		}
 	}
-	if files[0].Name != "01-guardrails-setup.yaml" || files[len(files)-1].Name != "09-smoke-run.yaml" {
+	if files[0].Name != "01-guardrails-setup.yaml" || files[len(files)-1].Name != "08-smoke-run.yaml" {
 		t.Errorf("files = %s ... %s", files[0].Name, files[len(files)-1].Name)
 	}
 }

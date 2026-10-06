@@ -37,6 +37,12 @@ Every plan lists all five stages; a stage with nothing to do has no steps.
 (dependencies on postgres/redis/rabbitmq are already satisfied by then). For
 ShopFlow: wave 1 is `api`; wave 2 is `web` and the `notifications` worker.
 
+**Ready means stable.** A service is ready when its health check passes. A
+worker has no health check, so its Deployment sets `minReadySeconds: 10`: the
+engine waits for *available* replicas, and a worker that crashes or runs out of
+memory right after starting fails the wave instead of passing it
+([diagnostics](diagnostics.md)).
+
 ## Database lifecycle
 
 ```text
@@ -240,6 +246,10 @@ created with mode 0600.
 
 ## Notes for the engine (P2)
 
+Implemented in `internal/engine`; see [engine.md](engine.md) for commands,
+recovery, data approval and verification. ShopFlow now starts schema-only;
+the earlier synthetic seed has been removed.
+
 - **Apply** each step with server-side apply and one field manager; wait as
   described above; record per-step timings (the e2e prints a baseline).
 - **Prune** after a generation succeeds: delete objects in the namespace whose
@@ -247,9 +257,11 @@ created with mode 0600.
   workloads). Jobs have no TTL on purpose, so the engine can still inspect a
   failed Job; pruning is what removes them.
 - **Immutable fields**: a StatefulSet's `volumeClaimTemplates` (Postgres
-  storage size) cannot change in place. Since the baseline is rebuilt every
-  generation anyway, delete and recreate the StatefulSet when that apply is
-  rejected. Jobs are immutable too, hence per-generation names.
+  storage size) cannot change in place. The engine detects a changed storage
+  request, drains application workloads, deletes the StatefulSet and old PVC,
+  waits for deletion, then recreates them before rebuilding the database.
+  Unrelated apply rejections do not cause recreation. Jobs are immutable too,
+  hence per-generation names.
 - **Credentials**: generate once per environment (`GenerateCredentials`), keep
   them in the cluster's `heimdall-credentials` Secret, and pass them back into
   every render so the rendered Secret is unchanged.

@@ -1,0 +1,19 @@
+{
+  "namespace": "heimdall-pr406-shopflow-52ec",
+  "generation": 1,
+  "diagnoses": [
+    {
+      "code": "HEALTHCHECK_FAILED",
+      "severity": "error",
+      "title": "Health check failing",
+      "summary": "api fails its readiness check: GET /healthz on port 8080 returns HTTP 404",
+      "subject": "deployment/api",
+      "workload": "api",
+      "stage": "application",
+      "suggestion": "`health.path` is /healthz, but the app answers 404 there. Point `health.path` at an endpoint that returns 2xx, or add one.",
+      "evidence": [
+        "Unhealthy: Readiness probe failed: HTTP probe failed with statuscode: 404 (x24)"
+      ]
+    }
+  ]
+}

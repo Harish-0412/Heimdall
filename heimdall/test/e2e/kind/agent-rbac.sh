@@ -57,8 +57,8 @@ namespace_yaml() { # name, labelled?
 
 printf '\n\033[1;34m==> Agent chart: install and permission checks\033[0m\n'
 helm upgrade --install heimdall-agent "$ROOT/charts/heimdall-agent" --kube-context "$CTX" \
-  --namespace "$AGENT_NS" --create-namespace --wait=false >/dev/null
-ok "chart installed (the agent image arrives in P3; only its permissions are exercised here)"
+  --namespace "$AGENT_NS" --create-namespace --set platform.baseDomain=preview.test --wait=false >/dev/null
+ok "chart installed (only its permissions are exercised here; test/e2e/agent runs the agent itself)"
 
 VAP="ValidatingAdmissionPolicy '[^']+' with binding '[^']+' denied request"
 
@@ -102,6 +102,19 @@ denied "$VAP|forbidden" "bind its role in kube-system" -- \
   agent -n kube-system create rolebinding x --clusterrole=heimdall-agent-preview-manager --user=x --dry-run=server
 denied "forbidden" "create deployments outside preview namespaces" -- \
   agent -n kube-system create deployment x --image=busybox --dry-run=server
+# Its own namespace: only its webhook certificate among Secrets, and config
+# maps by name only.
+cannot list secrets -n "$AGENT_NS"
+cannot create secrets -n "$AGENT_NS"
+cannot get secrets/some-other-secret -n "$AGENT_NS"
+agent auth can-i update secrets/heimdall-agent-webhook-tls -n "$AGENT_NS" --quiet || fail "agent cannot renew its webhook certificate"
+cannot list configmaps -n "$AGENT_NS"
+# Cluster scope: its own webhook configuration only; bindings never change.
+cannot update validatingwebhookconfigurations/some-other-webhook
+agent auth can-i update validatingwebhookconfigurations/heimdall-agent --quiet || fail "agent cannot inject its webhook CA"
+cannot delete rolebindings --all-namespaces
+cannot update rolebindings --all-namespaces
+ok "its own namespace and webhook: exactly what it needs"
 
 # --- Allowed: a full preview --------------------------------------------
 "$HEIMDALL" render --placeholder-images --generate-credentials --repo acme/shopflow --pr 185 \

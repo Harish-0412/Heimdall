@@ -1,0 +1,15 @@
+{{- if gt (int .Values.replicaCount) 1 }}
+# Keep one replica (and so the fail-closed webhook) through node drains.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "heimdall-agent.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "heimdall-agent.selectorLabels" . | nindent 6 }}
+{{- end }}

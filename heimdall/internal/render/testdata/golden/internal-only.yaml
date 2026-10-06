@@ -553,6 +553,7 @@ metadata:
   name: consumer
   namespace: heimdall-pr184-shopflow-x7d2
 spec:
+  minReadySeconds: 10
   replicas: 1
   revisionHistoryLimit: 2
   selector:

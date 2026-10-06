@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -68,7 +67,7 @@ func testContext(t testing.TB, cfg *config.Config) Context {
 		Platform:      Platform{BaseDomain: "preview.example.com"},
 	}
 	if p := cfg.Dependencies.Postgres; p != nil && p.Seed != "" {
-		ctx.Seed = []byte("INSERT INTO widgets (name) VALUES ('seeded');\n")
+		ctx.Seed = []byte("SELECT current_database();\n")
 	}
 	return ctx
 }
@@ -112,11 +111,6 @@ func shopflowPlan(t testing.TB) (*Plan, Context) {
 	t.Helper()
 	cfg := loadFile(t, shopflowConfig, config.DefaultPolicy())
 	ctx := testContext(t, cfg)
-	seed, err := os.ReadFile(filepath.Join(filepath.Dir(shopflowConfig), cfg.Dependencies.Postgres.Seed))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx.Seed = seed
 	return mustRender(t, cfg, ctx), ctx
 }
 

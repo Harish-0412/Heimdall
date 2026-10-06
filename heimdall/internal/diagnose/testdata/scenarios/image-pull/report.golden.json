@@ -1,0 +1,22 @@
+{
+  "namespace": "heimdall-pr401-shopflow-e5b8",
+  "generation": 1,
+  "diagnoses": [
+    {
+      "code": "IMAGE_PULL_FAILED",
+      "severity": "error",
+      "title": "Image cannot be pulled",
+      "summary": "The migration Job cannot pull image localhost:5004/shopflow-api@sha256:abababababababababababababababababababababababababababababababab: it does not exist in the registry",
+      "subject": "job/heimdall-migrate-g1",
+      "workload": "heimdall-migrate",
+      "stage": "baseline-db",
+      "suggestion": "The digest is not in the registry. Make sure CI pushed the image before requesting the preview, and that the digest and repository name match what it pushed.",
+      "evidence": [
+        "ImagePullBackOff: Back-off pulling image \"localhost:5004/shopflow-api@sha256:abababababababababababababababababababababababababababababababab\": ErrImagePull: rpc error: code = NotFound desc = failed to pull and unpack image \"localhost:5004…",
+        "Failed: Failed to pull image \"localhost:5004/shopflow-api@sha256:abababababababababababababababababababababababababababababababab\": rpc error: code = NotFound desc = failed to pull and unpack image \"localhost:5004/shopflow-api@sha256:ababa…",
+        "Failed: Error: ErrImagePull (x4)",
+        "Failed: Error: ImagePullBackOff (x7)"
+      ]
+    }
+  ]
+}

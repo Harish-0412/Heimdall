@@ -15,7 +15,7 @@ import (
 //
 //	prepare  fresh, empty baseline database owned by the app role
 //	migrate  the PR's migrations, against the baseline
-//	seed     the PR's synthetic seed file, against the baseline
+//	seed     an operator-approved sanitised import, against the baseline
 //	clone    freeze the baseline as a template; clone the live database from it
 //
 // Reset later repeats only the clone script, which is why it is a separate
@@ -162,9 +162,14 @@ func (b *builder) seed(p *config.Postgres) []Object {
 
 	img := b.dependencyImage(config.DepPostgres, p.Version)
 	c := container("psql", img.ref(b.platform.ImageMirror), true)
-	c.Command = []string{"sh", "-c", `until pg_isready --quiet --dbname="$DATABASE_URL"; do sleep 1; done; ` +
+	c.Command = []string{"sh", "-c", `test "$HEIMDALL_NAMESPACE" = '` + b.ns + `' || exit 64; ` +
+		`case "$HEIMDALL_NAMESPACE" in heimdall-*) ;; *) exit 64;; esac; ` +
+		`case "$DATABASE_URL" in postgres://app:*@postgres:5432/app_baseline\?sslmode=disable) ;; *) exit 64;; esac; ` +
+		`until pg_isready --quiet --dbname="$DATABASE_URL"; do sleep 1; done; ` +
 		`exec psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -f ` + seedDir + "/" + seedKey}
-	c.Env = []corev1.EnvVar{credential(config.EnvDatabaseURL, keyDatabaseURLBaseline)}
+	c.Env = []corev1.EnvVar{credential(config.EnvDatabaseURL, keyDatabaseURLBaseline), {
+		Name: "HEIMDALL_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}},
+	}}
 	c.Resources = b.fixed("250m", "256Mi")
 	c.VolumeMounts = []corev1.VolumeMount{readOnlyMount("seed", seedDir), mount("tmp", "/tmp")}
 	volumes := []corev1.Volume{configMapVolume("seed", cmName), scratch("tmp", tmpSize)}

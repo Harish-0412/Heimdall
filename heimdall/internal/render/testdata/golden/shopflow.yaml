@@ -1029,11 +1029,6 @@ spec:
           value: debug
         - name: NODE_ENV
           value: production
-        - name: STRIPE_TEST_KEY
-          valueFrom:
-            secretKeyRef:
-              key: STRIPE_TEST_KEY
-              name: heimdall-app-secrets
         image: registry.example.com/acme/api:pr184@sha256:14c2529eb4498c5d1ffd6915d05bf58a91bdda796af59f41d480d11c099d0479
         imagePullPolicy: IfNotPresent
         name: migrate
@@ -1070,146 +1065,6 @@ spec:
           type: RuntimeDefault
       serviceAccountName: heimdall-workload
       volumes:
-      - emptyDir:
-          sizeLimit: 256Mi
-        name: tmp
-# stage: baseline-db, step: seed
----
-apiVersion: v1
-data:
-  seed.sql: |
-    -- Synthetic seed data for ShopFlow previews. Never load production data here:
-    -- previews are reviewed by many people and run pull-request code.
-    --
-    -- Heimdall loads this file after migrations, as the unprivileged app role, in
-    -- a single transaction, into the baseline database that `reset` restores.
-
-    INSERT INTO products (sku, name, price_cents) VALUES
-      ('SF-TEE-001',  'Heimdall T-shirt',          2500),
-      ('SF-MUG-002',  'Bifrost coffee mug',        1400),
-      ('SF-CAP-003',  'Asgard baseball cap',       1900),
-      ('SF-STK-004',  'Preview environment stickers', 500),
-      ('SF-HOO-005',  'Gjallarhorn hoodie',        5400)
-    ON CONFLICT (sku) DO NOTHING;
-
-    INSERT INTO orders (product_id, quantity, email)
-    SELECT id, 2, 'reviewer@example.com' FROM products WHERE sku = 'SF-MUG-002';
-immutable: true
-kind: ConfigMap
-metadata:
-  annotations:
-    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
-  labels:
-    app.kubernetes.io/component: seed
-    app.kubernetes.io/instance: env-0f8b2c
-    app.kubernetes.io/managed-by: heimdall
-    app.kubernetes.io/part-of: shopflow
-    heimdall.dev/env: env-0f8b2c
-    heimdall.dev/expires: "1791028800"
-    heimdall.dev/generation: "3"
-    heimdall.dev/owner: octocat
-    heimdall.dev/pr: "184"
-    heimdall.dev/repo: acme.shopflow
-    heimdall.dev/stage: baseline-db
-    heimdall.dev/tenant: acme
-  name: heimdall-seed-g3
-  namespace: heimdall-pr184-shopflow-x7d2
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  annotations:
-    heimdall.dev/sha: 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39
-  labels:
-    app.kubernetes.io/component: seed
-    app.kubernetes.io/instance: env-0f8b2c
-    app.kubernetes.io/managed-by: heimdall
-    app.kubernetes.io/part-of: shopflow
-    heimdall.dev/env: env-0f8b2c
-    heimdall.dev/expires: "1791028800"
-    heimdall.dev/generation: "3"
-    heimdall.dev/owner: octocat
-    heimdall.dev/pr: "184"
-    heimdall.dev/repo: acme.shopflow
-    heimdall.dev/stage: baseline-db
-    heimdall.dev/tenant: acme
-  name: heimdall-seed-g3
-  namespace: heimdall-pr184-shopflow-x7d2
-spec:
-  activeDeadlineSeconds: 600
-  backoffLimit: 0
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/component: seed
-        app.kubernetes.io/instance: env-0f8b2c
-        app.kubernetes.io/managed-by: heimdall
-        app.kubernetes.io/name: heimdall-seed
-        app.kubernetes.io/part-of: shopflow
-        heimdall.dev/env: env-0f8b2c
-        heimdall.dev/generation: "3"
-        heimdall.dev/owner: octocat
-        heimdall.dev/pr: "184"
-        heimdall.dev/repo: acme.shopflow
-        heimdall.dev/stage: baseline-db
-        heimdall.dev/tenant: acme
-    spec:
-      automountServiceAccountToken: false
-      containers:
-      - command:
-        - sh
-        - -c
-        - until pg_isready --quiet --dbname="$DATABASE_URL"; do sleep 1; done; exec
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -f /seed/seed.sql
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              key: database-url-baseline
-              name: heimdall-credentials
-        image: public.ecr.aws/docker/library/postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
-        imagePullPolicy: IfNotPresent
-        name: psql
-        resources:
-          limits:
-            cpu: 250m
-            memory: 256Mi
-          requests:
-            cpu: 50m
-            memory: 128Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          privileged: false
-          readOnlyRootFilesystem: true
-          runAsNonRoot: true
-          seccompProfile:
-            type: RuntimeDefault
-        terminationMessagePolicy: FallbackToLogsOnError
-        volumeMounts:
-        - mountPath: /seed
-          name: seed
-          readOnly: true
-        - mountPath: /tmp
-          name: tmp
-      enableServiceLinks: false
-      restartPolicy: Never
-      securityContext:
-        fsGroup: 70
-        fsGroupChangePolicy: OnRootMismatch
-        runAsGroup: 70
-        runAsNonRoot: true
-        runAsUser: 70
-        seccompProfile:
-          type: RuntimeDefault
-      serviceAccountName: heimdall-workload
-      volumes:
-      - configMap:
-          defaultMode: 292
-          name: heimdall-seed-g3
-        name: seed
       - emptyDir:
           sizeLimit: 256Mi
         name: tmp
@@ -1432,11 +1287,6 @@ spec:
           value: debug
         - name: NODE_ENV
           value: production
-        - name: STRIPE_TEST_KEY
-          valueFrom:
-            secretKeyRef:
-              key: STRIPE_TEST_KEY
-              name: heimdall-app-secrets
         image: registry.example.com/acme/api:pr184@sha256:14c2529eb4498c5d1ffd6915d05bf58a91bdda796af59f41d480d11c099d0479
         imagePullPolicy: IfNotPresent
         name: api
@@ -1576,6 +1426,7 @@ metadata:
   name: notifications
   namespace: heimdall-pr184-shopflow-x7d2
 spec:
+  minReadySeconds: 10
   replicas: 1
   revisionHistoryLimit: 2
   selector:

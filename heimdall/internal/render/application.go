@@ -123,8 +123,16 @@ func (b *builder) workerDeployment(name string, w config.Worker) *appsv1.Deploym
 	c.Env = b.workloadEnv("workers."+name, 0, w.Env, w.Secrets, liveDatabase)
 	c.Resources = b.workloadResources("workers."+name, w.Resources)
 	c.VolumeMounts = []corev1.VolumeMount{mount("tmp", "/tmp")}
-	return b.appDeployment(name, componentWorker, w.Replicas, c)
+	d := b.appDeployment(name, componentWorker, w.Replicas, c)
+	// A worker has no health check, so "ready" only means "started". It must
+	// stay up this long to count as available: a worker that crashes or runs
+	// out of memory right after starting fails the rollout instead of passing.
+	d.Spec.MinReadySeconds = workerMinReadySeconds
+	return d
 }
+
+// workerMinReadySeconds is how long a worker must run before it counts.
+const workerMinReadySeconds = 10
 
 // appDeployment replaces pods one at a time without surging, so a rollout
 // never needs more than the environment's quota: a preview trades a few

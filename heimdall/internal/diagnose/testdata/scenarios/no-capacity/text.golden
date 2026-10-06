@@ -1,0 +1,14 @@
+NO_CAPACITY: No capacity to schedule (deployment/rabbitmq, stage dependencies)
+  rabbitmq cannot be scheduled: no node matches the preview node pool
+
+  What to do: The platform pins previews to a node pool (platform.nodeSelector/tolerations) that has no matching, untainted node. A platform administrator should check the pool.
+
+  Evidence:
+    | 0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.
+    | FailedScheduling: 0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.
+
+Also found (2):
+  - NO_CAPACITY redis cannot be scheduled: no node matches the preview node pool
+      The platform pins previews to a node pool (platform.nodeSelector/tolerations) that has no matching, untainted node. A platform administrator should check the pool.
+  - NO_CAPACITY postgres cannot be scheduled: no node matches the preview node pool
+      The platform pins previews to a node pool (platform.nodeSelector/tolerations) that has no matching, untainted node. A platform administrator should check the pool.

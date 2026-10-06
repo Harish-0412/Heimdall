@@ -1,7 +1,9 @@
 {{- if .Values.networkPolicy.enabled }}
-# Nothing needs to connect to the agent except a metrics scraper: it pulls
-# its work from the control plane (ADR 0004). Egress stays open because the
-# API server's address differs per cluster.
+# Only two things connect to the agent: the API server calling the admission
+# webhook, and a metrics scraper. The API server's source address differs per
+# cluster (often the host network), so the webhook port is open to any
+# source; it serves TLS with a certificate only the API server trusts.
+# Egress stays open because the API server's address differs per cluster.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -15,6 +17,9 @@ spec:
       {{- include "heimdall-agent.selectorLabels" . | nindent 6 }}
   policyTypes: ["Ingress"]
   ingress:
+    - ports:
+        - port: webhook
+          protocol: TCP
     - ports:
         - port: metrics
           protocol: TCP

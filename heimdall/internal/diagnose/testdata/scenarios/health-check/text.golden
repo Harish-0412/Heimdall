@@ -1,0 +1,7 @@
+HEALTHCHECK_FAILED: Health check failing (deployment/api, stage application)
+  api fails its readiness check: GET /healthz on port 8080 returns HTTP 404
+
+  What to do: `health.path` is /healthz, but the app answers 404 there. Point `health.path` at an endpoint that returns 2xx, or add one.
+
+  Evidence:
+    | Unhealthy: Readiness probe failed: HTTP probe failed with statuscode: 404 (x24)

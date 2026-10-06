@@ -173,14 +173,17 @@ func (p Platform) withDefaults() Platform {
 	if p.Gateway.Name == "" {
 		p.Gateway.Name = DefaultGatewayName
 	}
-	if p.IngressPeers == nil {
+	// Empty, not just nil: a NetworkPolicy rule whose peer list is empty
+	// matches every peer, which would open public services (and DNS egress)
+	// to the whole cluster.
+	if len(p.IngressPeers) == 0 {
 		p.IngressPeers = []networkingv1.NetworkPolicyPeer{{
 			NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{
 				corev1.LabelMetadataName: p.Gateway.Namespace,
 			}},
 		}}
 	}
-	if p.DNSPeers == nil {
+	if len(p.DNSPeers) == 0 {
 		p.DNSPeers = []networkingv1.NetworkPolicyPeer{{
 			NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{corev1.LabelMetadataName: "kube-system"}},
 			PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{"k8s-app": "kube-dns"}},
@@ -251,6 +254,12 @@ func (c *Context) validate(cfg *config.Config) Errors {
 
 	errs = append(errs, c.Platform.validate()...)
 	return errs
+}
+
+// ValidatePlatform checks platform settings (after defaults) exactly as Render
+// will, so a misconfigured agent fails at start-up rather than on first use.
+func ValidatePlatform(p Platform) error {
+	return p.withDefaults().validate().err()
 }
 
 func (p Platform) validate() Errors {

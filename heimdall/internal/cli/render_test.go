@@ -73,7 +73,7 @@ func TestRender_ImagesFromFlagsAndFile(t *testing.T) {
 func TestRender_ListAndOutDir(t *testing.T) {
 	code, out, _ := run(append(fixedRender, "--placeholder-images", "--list", example)...)
 	if code != ExitOK || !strings.HasPrefix(out, "namespace: heimdall-pr184-shopflow-") ||
-		!strings.Contains(out, "(primary)") || !strings.Contains(out, "step: 09-smoke-run") {
+		!strings.Contains(out, "(primary)") || !strings.Contains(out, "step: 08-smoke-run") {
 		t.Fatalf("exit = %d, list:\n%s", code, out)
 	}
 
@@ -83,14 +83,14 @@ func TestRender_ListAndOutDir(t *testing.T) {
 		t.Fatalf("exit = %d\n%s", code, errs)
 	}
 	entries, err := os.ReadDir(dir)
-	if err != nil || len(entries) != 9 || entries[0].Name() != "01-guardrails-setup.yaml" {
+	if err != nil || len(entries) != 8 || entries[0].Name() != "01-guardrails-setup.yaml" {
 		t.Fatalf("files = %v, %v", entries, err)
 	}
 	guard, _ := os.ReadFile(filepath.Join(dir, entries[0].Name()))
 	if !bytes.Contains(guard, []byte("kind: Secret")) || !bytes.Contains(guard, []byte("name: heimdall-credentials")) {
 		t.Error("--generate-credentials must render the credentials Secret")
 	}
-	if strings.Count(out, "\n") != 9 {
+	if strings.Count(out, "\n") != 8 {
 		t.Errorf("stdout should list the written files:\n%s", out)
 	}
 }
@@ -167,5 +167,21 @@ func TestSchemaCommand(t *testing.T) {
 	}
 	if code, out, _ := run("schema", "--help"); code != ExitOK || !strings.Contains(out, "yaml-language-server") {
 		t.Errorf("schema --help: exit = %d, %q", code, out)
+	}
+}
+
+// --node-selector pins every pod to the preview node pool, as the agent's
+// platform.nodeSelector does.
+func TestRender_NodeSelector(t *testing.T) {
+	code, out, errs := run(append(fixedRender, "--placeholder-images", "--node-selector", "heimdall.dev/pool=previews", example)...)
+	if code != ExitOK {
+		t.Fatalf("exit = %d\n%s", code, errs)
+	}
+	pods := strings.Count(out, "\n      containers:\n") + strings.Count(out, "\n          containers:\n")
+	if n := strings.Count(out, "heimdall.dev/pool: previews"); pods == 0 || n != pods {
+		t.Errorf("node selector on %d of %d pod templates", n, pods)
+	}
+	if code, _, errs := run(append(fixedRender, "--node-selector", "nonsense", example)...); code != ExitUsage || !strings.Contains(errs, "nonsense") {
+		t.Errorf("malformed selector: exit %d %q", code, errs)
 	}
 }

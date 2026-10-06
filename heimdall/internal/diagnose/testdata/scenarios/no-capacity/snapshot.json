@@ -1,0 +1,1509 @@
+{
+  "version": 1,
+  "capturedAt": "2026-10-02T05:32:26Z",
+  "namespace": "heimdall-pr409-shopflow-3e82",
+  "generation": 1,
+  "acceptedGeneration": 1,
+  "failure": {
+    "code": "engine.timeout",
+    "step": "dependencies/start"
+  },
+  "pods": [
+    {
+      "metadata": {
+        "name": "postgres-0",
+        "generateName": "postgres-",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "ca4130d0-f34e-4707-9db5-1dd755f0536d",
+        "resourceVersion": "22111",
+        "generation": 1,
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "database",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/name": "postgres",
+          "app.kubernetes.io/part-of": "shopflow",
+          "apps.kubernetes.io/pod-index": "0",
+          "controller-revision-hash": "postgres-7d845656df",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/tenant": "p4",
+          "statefulset.kubernetes.io/pod-name": "postgres-0"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "StatefulSet",
+            "name": "postgres",
+            "uid": "d0f1af97-6232-4167-a104-ea1fe3927f81",
+            "controller": true,
+            "blockOwnerDeletion": true
+          }
+        ]
+      },
+      "spec": {
+        "volumes": [
+          {
+            "name": "data",
+            "persistentVolumeClaim": {
+              "claimName": "data-postgres-0"
+            }
+          },
+          {
+            "name": "run",
+            "emptyDir": {
+              "sizeLimit": "16Mi"
+            }
+          },
+          {
+            "name": "tmp",
+            "emptyDir": {
+              "sizeLimit": "256Mi"
+            }
+          }
+        ],
+        "containers": [
+          {
+            "name": "postgres",
+            "image": "public.ecr.aws/docker/library/postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+            "ports": [
+              {
+                "name": "postgres",
+                "containerPort": 5432,
+                "protocol": "TCP"
+              }
+            ],
+            "env": [
+              {
+                "name": "POSTGRES_PASSWORD",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "heimdall-credentials",
+                    "key": "postgres-superuser-password"
+                  }
+                }
+              },
+              {
+                "name": "PGDATA"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "500m",
+                "memory": "512Mi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/var/lib/postgresql/data"
+              },
+              {
+                "name": "run",
+                "mountPath": "/var/run/postgresql"
+              },
+              {
+                "name": "tmp",
+                "mountPath": "/tmp"
+              }
+            ],
+            "readinessProbe": {
+              "exec": {
+                "command": [
+                  "pg_isready",
+                  "--quiet",
+                  "--username=postgres",
+                  "--host=127.0.0.1"
+                ]
+              },
+              "initialDelaySeconds": 5,
+              "timeoutSeconds": 3,
+              "periodSeconds": 5,
+              "successThreshold": 1,
+              "failureThreshold": 6
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "FallbackToLogsOnError",
+            "imagePullPolicy": "IfNotPresent",
+            "securityContext": {
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "privileged": false,
+              "runAsNonRoot": true,
+              "readOnlyRootFilesystem": true,
+              "allowPrivilegeEscalation": false,
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            }
+          }
+        ],
+        "restartPolicy": "Always",
+        "terminationGracePeriodSeconds": 30,
+        "dnsPolicy": "ClusterFirst",
+        "nodeSelector": {
+          "heimdall.dev/pool": "previews"
+        },
+        "serviceAccountName": "heimdall-workload",
+        "serviceAccount": "heimdall-workload",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsUser": 70,
+          "runAsGroup": 70,
+          "runAsNonRoot": true,
+          "fsGroup": 70,
+          "fsGroupChangePolicy": "OnRootMismatch",
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "hostname": "postgres-0",
+        "subdomain": "postgres",
+        "schedulerName": "default-scheduler",
+        "tolerations": [
+          {
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "effect": "NoExecute",
+            "tolerationSeconds": 300
+          },
+          {
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "effect": "NoExecute",
+            "tolerationSeconds": 300
+          }
+        ],
+        "priority": 0,
+        "enableServiceLinks": false,
+        "preemptionPolicy": "PreemptLowerPriority"
+      },
+      "status": {
+        "phase": "Pending",
+        "conditions": [
+          {
+            "type": "PodScheduled",
+            "observedGeneration": 1,
+            "status": "False",
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-02T05:30:56Z",
+            "reason": "Unschedulable",
+            "message": "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling."
+          }
+        ],
+        "qosClass": "Burstable"
+      }
+    },
+    {
+      "metadata": {
+        "name": "rabbitmq-5f88c98577-d6v4d",
+        "generateName": "rabbitmq-5f88c98577-",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "7d41098c-678d-4c11-b746-1913e1a2fd91",
+        "resourceVersion": "22126",
+        "generation": 1,
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "broker",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/name": "rabbitmq",
+          "app.kubernetes.io/part-of": "shopflow",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/tenant": "p4",
+          "pod-template-hash": "5f88c98577"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "ReplicaSet",
+            "name": "rabbitmq-5f88c98577",
+            "uid": "3c65f8f0-e7bc-4288-901c-305502e1eb43",
+            "controller": true,
+            "blockOwnerDeletion": true
+          }
+        ]
+      },
+      "spec": {
+        "volumes": [
+          {
+            "name": "data",
+            "emptyDir": {
+              "sizeLimit": "512Mi"
+            }
+          },
+          {
+            "name": "log",
+            "emptyDir": {
+              "sizeLimit": "64Mi"
+            }
+          },
+          {
+            "name": "tmp",
+            "emptyDir": {
+              "sizeLimit": "256Mi"
+            }
+          }
+        ],
+        "containers": [
+          {
+            "name": "rabbitmq",
+            "image": "public.ecr.aws/docker/library/rabbitmq:3.13.7-alpine@sha256:d7af1c87c5f1eda13fcfca06db452bf3aeab6619fc3358b68535c0c02c4e52bc",
+            "ports": [
+              {
+                "name": "rabbitmq",
+                "containerPort": 5672,
+                "protocol": "TCP"
+              }
+            ],
+            "env": [
+              {
+                "name": "RABBITMQ_DEFAULT_USER"
+              },
+              {
+                "name": "RABBITMQ_DEFAULT_PASS",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "heimdall-credentials",
+                    "key": "rabbitmq-password"
+                  }
+                }
+              },
+              {
+                "name": "ERL_CRASH_DUMP"
+              },
+              {
+                "name": "RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS"
+              },
+              {
+                "name": "RABBITMQ_ENABLED_PLUGINS_FILE"
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "250m",
+                "memory": "512Mi"
+              },
+              "requests": {
+                "cpu": "50m",
+                "memory": "256Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/var/lib/rabbitmq"
+              },
+              {
+                "name": "log",
+                "mountPath": "/var/log/rabbitmq"
+              },
+              {
+                "name": "tmp",
+                "mountPath": "/tmp"
+              }
+            ],
+            "readinessProbe": {
+              "tcpSocket": {
+                "port": "rabbitmq"
+              },
+              "initialDelaySeconds": 10,
+              "timeoutSeconds": 3,
+              "periodSeconds": 5,
+              "successThreshold": 1,
+              "failureThreshold": 6
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "FallbackToLogsOnError",
+            "imagePullPolicy": "IfNotPresent",
+            "securityContext": {
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "privileged": false,
+              "runAsNonRoot": true,
+              "readOnlyRootFilesystem": true,
+              "allowPrivilegeEscalation": false,
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            }
+          }
+        ],
+        "restartPolicy": "Always",
+        "terminationGracePeriodSeconds": 30,
+        "dnsPolicy": "ClusterFirst",
+        "nodeSelector": {
+          "heimdall.dev/pool": "previews"
+        },
+        "serviceAccountName": "heimdall-workload",
+        "serviceAccount": "heimdall-workload",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsUser": 100,
+          "runAsGroup": 101,
+          "runAsNonRoot": true,
+          "fsGroup": 101,
+          "fsGroupChangePolicy": "OnRootMismatch",
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "schedulerName": "default-scheduler",
+        "tolerations": [
+          {
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "effect": "NoExecute",
+            "tolerationSeconds": 300
+          },
+          {
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "effect": "NoExecute",
+            "tolerationSeconds": 300
+          }
+        ],
+        "priority": 0,
+        "enableServiceLinks": false,
+        "preemptionPolicy": "PreemptLowerPriority"
+      },
+      "status": {
+        "phase": "Pending",
+        "conditions": [
+          {
+            "type": "PodScheduled",
+            "observedGeneration": 1,
+            "status": "False",
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-02T05:30:56Z",
+            "reason": "Unschedulable",
+            "message": "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling."
+          }
+        ],
+        "qosClass": "Burstable"
+      }
+    },
+    {
+      "metadata": {
+        "name": "redis-847975dffb-8qj69",
+        "generateName": "redis-847975dffb-",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "13cf68f8-af95-4281-a872-2675b53c98e1",
+        "resourceVersion": "22139",
+        "generation": 1,
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "cache",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/name": "redis",
+          "app.kubernetes.io/part-of": "shopflow",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/tenant": "p4",
+          "pod-template-hash": "847975dffb"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "ReplicaSet",
+            "name": "redis-847975dffb",
+            "uid": "466dce07-dd1c-4901-bd1d-ceb6fcd57257",
+            "controller": true,
+            "blockOwnerDeletion": true
+          }
+        ]
+      },
+      "spec": {
+        "volumes": [
+          {
+            "name": "data",
+            "emptyDir": {
+              "sizeLimit": "64Mi"
+            }
+          },
+          {
+            "name": "tmp",
+            "emptyDir": {
+              "sizeLimit": "256Mi"
+            }
+          }
+        ],
+        "containers": [
+          {
+            "name": "redis",
+            "image": "public.ecr.aws/docker/library/redis:7.2.16-alpine@sha256:29e8589c3f9ba699b5f7aa4b3c7733c58852a3626439e619aa0ee78de08c6ca0",
+            "args": [
+              "redis-server",
+              "--requirepass",
+              "$(REDIS_PASSWORD)",
+              "--save",
+              "",
+              "--appendonly",
+              "no",
+              "--maxmemory",
+              "96mb",
+              "--maxmemory-policy",
+              "allkeys-lru"
+            ],
+            "ports": [
+              {
+                "name": "redis",
+                "containerPort": 6379,
+                "protocol": "TCP"
+              }
+            ],
+            "env": [
+              {
+                "name": "REDIS_PASSWORD",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "name": "heimdall-credentials",
+                    "key": "redis-password"
+                  }
+                }
+              }
+            ],
+            "resources": {
+              "limits": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "requests": {
+                "cpu": "20m",
+                "memory": "64Mi"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "data",
+                "mountPath": "/data"
+              },
+              {
+                "name": "tmp",
+                "mountPath": "/tmp"
+              }
+            ],
+            "readinessProbe": {
+              "tcpSocket": {
+                "port": "redis"
+              },
+              "initialDelaySeconds": 2,
+              "timeoutSeconds": 3,
+              "periodSeconds": 5,
+              "successThreshold": 1,
+              "failureThreshold": 6
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "FallbackToLogsOnError",
+            "imagePullPolicy": "IfNotPresent",
+            "securityContext": {
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "privileged": false,
+              "runAsNonRoot": true,
+              "readOnlyRootFilesystem": true,
+              "allowPrivilegeEscalation": false,
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            }
+          }
+        ],
+        "restartPolicy": "Always",
+        "terminationGracePeriodSeconds": 30,
+        "dnsPolicy": "ClusterFirst",
+        "nodeSelector": {
+          "heimdall.dev/pool": "previews"
+        },
+        "serviceAccountName": "heimdall-workload",
+        "serviceAccount": "heimdall-workload",
+        "automountServiceAccountToken": false,
+        "securityContext": {
+          "runAsUser": 999,
+          "runAsGroup": 1000,
+          "runAsNonRoot": true,
+          "fsGroup": 1000,
+          "fsGroupChangePolicy": "OnRootMismatch",
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "schedulerName": "default-scheduler",
+        "tolerations": [
+          {
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "effect": "NoExecute",
+            "tolerationSeconds": 300
+          },
+          {
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "effect": "NoExecute",
+            "tolerationSeconds": 300
+          }
+        ],
+        "priority": 0,
+        "enableServiceLinks": false,
+        "preemptionPolicy": "PreemptLowerPriority"
+      },
+      "status": {
+        "phase": "Pending",
+        "conditions": [
+          {
+            "type": "PodScheduled",
+            "observedGeneration": 1,
+            "status": "False",
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-02T05:30:56Z",
+            "reason": "Unschedulable",
+            "message": "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling."
+          }
+        ],
+        "qosClass": "Burstable"
+      }
+    }
+  ],
+  "events": [
+    {
+      "metadata": {
+        "name": "data-postgres-0.18da9f64ae249c6c",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "e881857c-f95e-443b-a9d6-775491be98c9",
+        "resourceVersion": "22105",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "PersistentVolumeClaim",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "data-postgres-0",
+        "uid": "22df3315-decd-4e9f-a2d1-b931b3500325",
+        "apiVersion": "v1",
+        "resourceVersion": "22104"
+      },
+      "reason": "WaitForFirstConsumer",
+      "message": "waiting for first consumer to be created before binding",
+      "source": {
+        "component": "persistentvolume-controller"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:30:56Z",
+      "count": 1,
+      "type": "Normal",
+      "eventTime": null,
+      "reportingComponent": "persistentvolume-controller",
+      "reportingInstance": ""
+    },
+    {
+      "metadata": {
+        "name": "postgres-0.18da9f64afbbf409",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "a440471b-52f6-48af-bdc9-0a902f996bb6",
+        "resourceVersion": "22110",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "Pod",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "postgres-0",
+        "uid": "ca4130d0-f34e-4707-9db5-1dd755f0536d",
+        "apiVersion": "v1",
+        "resourceVersion": "22108"
+      },
+      "reason": "FailedScheduling",
+      "message": "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.",
+      "source": {
+        "component": "default-scheduler"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:30:56Z",
+      "count": 1,
+      "type": "Warning",
+      "eventTime": null,
+      "reportingComponent": "default-scheduler",
+      "reportingInstance": ""
+    },
+    {
+      "metadata": {
+        "name": "postgres.18da9f64ae2d8565",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "26d792d9-e1e9-4e26-9207-cea506575c66",
+        "resourceVersion": "22106",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "StatefulSet",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "postgres",
+        "uid": "d0f1af97-6232-4167-a104-ea1fe3927f81",
+        "apiVersion": "apps/v1",
+        "resourceVersion": "22101"
+      },
+      "reason": "SuccessfulCreate",
+      "message": "Create Claim data-postgres-0 Pod postgres-0 in StatefulSet postgres success",
+      "source": {
+        "component": "statefulset-controller"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:30:56Z",
+      "count": 1,
+      "type": "Normal",
+      "eventTime": null,
+      "reportingComponent": "statefulset-controller",
+      "reportingInstance": ""
+    },
+    {
+      "metadata": {
+        "name": "postgres.18da9f64b004ff0f",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "004c2b22-f0be-4699-b49f-e1e354fb1659",
+        "resourceVersion": "22113",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "StatefulSet",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "postgres",
+        "uid": "d0f1af97-6232-4167-a104-ea1fe3927f81",
+        "apiVersion": "apps/v1",
+        "resourceVersion": "22101"
+      },
+      "reason": "SuccessfulCreate",
+      "message": "Create Pod postgres-0 in StatefulSet postgres successful",
+      "source": {
+        "component": "statefulset-controller"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:30:56Z",
+      "count": 1,
+      "type": "Normal",
+      "eventTime": null,
+      "reportingComponent": "statefulset-controller",
+      "reportingInstance": ""
+    },
+    {
+      "metadata": {
+        "name": "rabbitmq-5f88c98577-d6v4d.18da9f64b7a2d735",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "ad3ae1fd-105b-43d6-933e-cfd3e4d4039e",
+        "resourceVersion": "22124",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "Pod",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "rabbitmq-5f88c98577-d6v4d",
+        "uid": "7d41098c-678d-4c11-b746-1913e1a2fd91",
+        "apiVersion": "v1",
+        "resourceVersion": "22121"
+      },
+      "reason": "FailedScheduling",
+      "message": "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.",
+      "source": {
+        "component": "default-scheduler"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:30:56Z",
+      "count": 1,
+      "type": "Warning",
+      "eventTime": null,
+      "reportingComponent": "default-scheduler",
+      "reportingInstance": ""
+    },
+    {
+      "metadata": {
+        "name": "rabbitmq-5f88c98577.18da9f64b79a75b2",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "73a92026-764d-4b37-b9f6-d0e790e0336b",
+        "resourceVersion": "22123",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "ReplicaSet",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "rabbitmq-5f88c98577",
+        "uid": "3c65f8f0-e7bc-4288-901c-305502e1eb43",
+        "apiVersion": "apps/v1",
+        "resourceVersion": "22117"
+      },
+      "reason": "SuccessfulCreate",
+      "message": "Created pod: rabbitmq-5f88c98577-d6v4d",
+      "source": {
+        "component": "replicaset-controller"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:30:56Z",
+      "count": 1,
+      "type": "Normal",
+      "eventTime": null,
+      "reportingComponent": "replicaset-controller",
+      "reportingInstance": ""
+    },
+    {
+      "metadata": {
+        "name": "rabbitmq.18da9f64b5695c7f",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "ca04a53a-ca88-4892-9539-8af4c3bc422e",
+        "resourceVersion": "22118",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "Deployment",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "rabbitmq",
+        "uid": "0bcd0175-6338-4bc0-bdd8-8057c280fd26",
+        "apiVersion": "apps/v1",
+        "resourceVersion": "22116"
+      },
+      "reason": "ScalingReplicaSet",
+      "message": "Scaled up replica set rabbitmq-5f88c98577 from 0 to 1",
+      "source": {
+        "component": "deployment-controller"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:30:56Z",
+      "count": 1,
+      "type": "Normal",
+      "eventTime": null,
+      "reportingComponent": "deployment-controller",
+      "reportingInstance": ""
+    },
+    {
+      "metadata": {
+        "name": "redis-847975dffb-8qj69.18da9f64c067632c",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "0c08f134-8d11-4d3e-b3de-1f0986286312",
+        "resourceVersion": "22136",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "Pod",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "redis-847975dffb-8qj69",
+        "uid": "13cf68f8-af95-4281-a872-2675b53c98e1",
+        "apiVersion": "v1",
+        "resourceVersion": "22134"
+      },
+      "reason": "FailedScheduling",
+      "message": "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.",
+      "source": {
+        "component": "default-scheduler"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:30:56Z",
+      "count": 1,
+      "type": "Warning",
+      "eventTime": null,
+      "reportingComponent": "default-scheduler",
+      "reportingInstance": ""
+    },
+    {
+      "metadata": {
+        "name": "redis-847975dffb.18da9f64c05e0910",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "293d2809-96fd-41db-9fbd-783136255052",
+        "resourceVersion": "22135",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "ReplicaSet",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "redis-847975dffb",
+        "uid": "466dce07-dd1c-4901-bd1d-ceb6fcd57257",
+        "apiVersion": "apps/v1",
+        "resourceVersion": "22130"
+      },
+      "reason": "SuccessfulCreate",
+      "message": "Created pod: redis-847975dffb-8qj69",
+      "source": {
+        "component": "replicaset-controller"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:30:56Z",
+      "count": 1,
+      "type": "Normal",
+      "eventTime": null,
+      "reportingComponent": "replicaset-controller",
+      "reportingInstance": ""
+    },
+    {
+      "metadata": {
+        "name": "redis.18da9f64be39fda3",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "372c8e97-efab-4514-a8ac-2125eff975b1",
+        "resourceVersion": "22131",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "Deployment",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "redis",
+        "uid": "131dc868-5241-4616-8617-29d7ac4ad66d",
+        "apiVersion": "apps/v1",
+        "resourceVersion": "22129"
+      },
+      "reason": "ScalingReplicaSet",
+      "message": "Scaled up replica set redis-847975dffb from 0 to 1",
+      "source": {
+        "component": "deployment-controller"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:30:56Z",
+      "count": 1,
+      "type": "Normal",
+      "eventTime": null,
+      "reportingComponent": "deployment-controller",
+      "reportingInstance": ""
+    },
+    {
+      "metadata": {
+        "name": "data-postgres-0.18da9f64affb9092",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "ce243580-e289-4069-8365-aeb3830b33b4",
+        "resourceVersion": "22310",
+        "creationTimestamp": "2026-10-02T05:30:56Z"
+      },
+      "involvedObject": {
+        "kind": "PersistentVolumeClaim",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "name": "data-postgres-0",
+        "uid": "22df3315-decd-4e9f-a2d1-b931b3500325",
+        "apiVersion": "v1",
+        "resourceVersion": "22109"
+      },
+      "reason": "WaitForPodScheduled",
+      "message": "waiting for pod postgres-0 to be scheduled",
+      "source": {
+        "component": "persistentvolume-controller"
+      },
+      "firstTimestamp": "2026-10-02T05:30:56Z",
+      "lastTimestamp": "2026-10-02T05:32:19Z",
+      "count": 7,
+      "type": "Normal",
+      "eventTime": null,
+      "reportingComponent": "persistentvolume-controller",
+      "reportingInstance": ""
+    }
+  ],
+  "deployments": [
+    {
+      "metadata": {
+        "name": "rabbitmq",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "0bcd0175-6338-4bc0-bdd8-8057c280fd26",
+        "resourceVersion": "22128",
+        "generation": 1,
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "broker",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/part-of": "shopflow",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/expires": "1791091855",
+          "heimdall.dev/generation": "1",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/stage": "dependencies",
+          "heimdall.dev/tenant": "p4"
+        },
+        "annotations": {
+          "deployment.kubernetes.io/revision": "1",
+          "heimdall.dev/sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "rabbitmq"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/component": "broker",
+              "app.kubernetes.io/instance": "p4-shopflow-pr409",
+              "app.kubernetes.io/managed-by": "heimdall",
+              "app.kubernetes.io/name": "rabbitmq",
+              "app.kubernetes.io/part-of": "shopflow",
+              "heimdall.dev/env": "p4-shopflow-pr409",
+              "heimdall.dev/owner": "local",
+              "heimdall.dev/pr": "409",
+              "heimdall.dev/repo": "local.shopflow",
+              "heimdall.dev/tenant": "p4"
+            }
+          },
+          "spec": {
+            "containers": null
+          }
+        },
+        "strategy": {
+          "type": "Recreate"
+        },
+        "revisionHistoryLimit": 2,
+        "progressDeadlineSeconds": 600
+      },
+      "status": {
+        "observedGeneration": 1,
+        "replicas": 1,
+        "updatedReplicas": 1,
+        "unavailableReplicas": 1,
+        "terminatingReplicas": 0,
+        "conditions": [
+          {
+            "type": "Available",
+            "status": "False",
+            "lastUpdateTime": "2026-10-02T05:30:56Z",
+            "lastTransitionTime": "2026-10-02T05:30:56Z",
+            "reason": "MinimumReplicasUnavailable",
+            "message": "Deployment does not have minimum availability."
+          },
+          {
+            "type": "Progressing",
+            "status": "True",
+            "lastUpdateTime": "2026-10-02T05:30:56Z",
+            "lastTransitionTime": "2026-10-02T05:30:56Z",
+            "reason": "ReplicaSetUpdated",
+            "message": "ReplicaSet \"rabbitmq-5f88c98577\" is progressing."
+          }
+        ]
+      }
+    },
+    {
+      "metadata": {
+        "name": "redis",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "131dc868-5241-4616-8617-29d7ac4ad66d",
+        "resourceVersion": "22141",
+        "generation": 1,
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "cache",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/part-of": "shopflow",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/expires": "1791091855",
+          "heimdall.dev/generation": "1",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/stage": "dependencies",
+          "heimdall.dev/tenant": "p4"
+        },
+        "annotations": {
+          "deployment.kubernetes.io/revision": "1",
+          "heimdall.dev/sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "redis"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/component": "cache",
+              "app.kubernetes.io/instance": "p4-shopflow-pr409",
+              "app.kubernetes.io/managed-by": "heimdall",
+              "app.kubernetes.io/name": "redis",
+              "app.kubernetes.io/part-of": "shopflow",
+              "heimdall.dev/env": "p4-shopflow-pr409",
+              "heimdall.dev/owner": "local",
+              "heimdall.dev/pr": "409",
+              "heimdall.dev/repo": "local.shopflow",
+              "heimdall.dev/tenant": "p4"
+            }
+          },
+          "spec": {
+            "containers": null
+          }
+        },
+        "strategy": {
+          "type": "Recreate"
+        },
+        "revisionHistoryLimit": 2,
+        "progressDeadlineSeconds": 600
+      },
+      "status": {
+        "observedGeneration": 1,
+        "replicas": 1,
+        "updatedReplicas": 1,
+        "unavailableReplicas": 1,
+        "terminatingReplicas": 0,
+        "conditions": [
+          {
+            "type": "Available",
+            "status": "False",
+            "lastUpdateTime": "2026-10-02T05:30:56Z",
+            "lastTransitionTime": "2026-10-02T05:30:56Z",
+            "reason": "MinimumReplicasUnavailable",
+            "message": "Deployment does not have minimum availability."
+          },
+          {
+            "type": "Progressing",
+            "status": "True",
+            "lastUpdateTime": "2026-10-02T05:30:56Z",
+            "lastTransitionTime": "2026-10-02T05:30:56Z",
+            "reason": "ReplicaSetUpdated",
+            "message": "ReplicaSet \"redis-847975dffb\" is progressing."
+          }
+        ]
+      }
+    }
+  ],
+  "statefulSets": [
+    {
+      "metadata": {
+        "name": "postgres",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "d0f1af97-6232-4167-a104-ea1fe3927f81",
+        "resourceVersion": "22115",
+        "generation": 1,
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "database",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/part-of": "shopflow",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/expires": "1791091855",
+          "heimdall.dev/generation": "1",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/stage": "dependencies",
+          "heimdall.dev/tenant": "p4"
+        },
+        "annotations": {
+          "heimdall.dev/sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "postgres"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app.kubernetes.io/component": "database",
+              "app.kubernetes.io/instance": "p4-shopflow-pr409",
+              "app.kubernetes.io/managed-by": "heimdall",
+              "app.kubernetes.io/name": "postgres",
+              "app.kubernetes.io/part-of": "shopflow",
+              "heimdall.dev/env": "p4-shopflow-pr409",
+              "heimdall.dev/owner": "local",
+              "heimdall.dev/pr": "409",
+              "heimdall.dev/repo": "local.shopflow",
+              "heimdall.dev/tenant": "p4"
+            }
+          },
+          "spec": {
+            "containers": null
+          }
+        },
+        "serviceName": "postgres",
+        "podManagementPolicy": "OrderedReady",
+        "updateStrategy": {
+          "type": "RollingUpdate"
+        },
+        "revisionHistoryLimit": 2,
+        "persistentVolumeClaimRetentionPolicy": {
+          "whenDeleted": "Delete",
+          "whenScaled": "Retain"
+        }
+      },
+      "status": {
+        "observedGeneration": 1,
+        "replicas": 1,
+        "currentReplicas": 1,
+        "updatedReplicas": 1,
+        "currentRevision": "postgres-7d845656df",
+        "updateRevision": "postgres-7d845656df",
+        "collisionCount": 0,
+        "availableReplicas": 0
+      }
+    }
+  ],
+  "services": [
+    {
+      "metadata": {
+        "name": "postgres",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "efbcca8d-1b33-4548-bf78-d30b54f094d2",
+        "resourceVersion": "22087",
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "database",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/part-of": "shopflow",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/expires": "1791091855",
+          "heimdall.dev/generation": "1",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/stage": "dependencies",
+          "heimdall.dev/tenant": "p4"
+        },
+        "annotations": {
+          "heimdall.dev/sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "name": "postgres",
+            "protocol": "TCP",
+            "port": 5432,
+            "targetPort": "postgres"
+          }
+        ],
+        "selector": {
+          "app.kubernetes.io/name": "postgres"
+        },
+        "clusterIP": "10.96.38.58",
+        "clusterIPs": [
+          "10.96.38.58"
+        ],
+        "type": "ClusterIP",
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "metadata": {
+        "name": "rabbitmq",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "a69a6b72-910a-4aa7-a576-ffd1e750a91c",
+        "resourceVersion": "22093",
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "broker",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/part-of": "shopflow",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/expires": "1791091855",
+          "heimdall.dev/generation": "1",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/stage": "dependencies",
+          "heimdall.dev/tenant": "p4"
+        },
+        "annotations": {
+          "heimdall.dev/sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "name": "rabbitmq",
+            "protocol": "TCP",
+            "port": 5672,
+            "targetPort": "rabbitmq"
+          }
+        ],
+        "selector": {
+          "app.kubernetes.io/name": "rabbitmq"
+        },
+        "clusterIP": "10.96.19.247",
+        "clusterIPs": [
+          "10.96.19.247"
+        ],
+        "type": "ClusterIP",
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "metadata": {
+        "name": "redis",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "eabd6c29-97ad-417f-9d96-1943cd6ceb78",
+        "resourceVersion": "22098",
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "cache",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/part-of": "shopflow",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/expires": "1791091855",
+          "heimdall.dev/generation": "1",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/stage": "dependencies",
+          "heimdall.dev/tenant": "p4"
+        },
+        "annotations": {
+          "heimdall.dev/sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "name": "redis",
+            "protocol": "TCP",
+            "port": 6379,
+            "targetPort": "redis"
+          }
+        ],
+        "selector": {
+          "app.kubernetes.io/name": "redis"
+        },
+        "clusterIP": "10.96.193.244",
+        "clusterIPs": [
+          "10.96.193.244"
+        ],
+        "type": "ClusterIP",
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    }
+  ],
+  "endpointSlices": [
+    {
+      "metadata": {
+        "name": "postgres-lphcd",
+        "generateName": "postgres-",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "db773434-7d5e-43a4-9955-0aeaf2d0ec54",
+        "resourceVersion": "22088",
+        "generation": 1,
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "database",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/part-of": "shopflow",
+          "endpointslice.kubernetes.io/managed-by": "endpointslice-controller.k8s.io",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/expires": "1791091855",
+          "heimdall.dev/generation": "1",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/stage": "dependencies",
+          "heimdall.dev/tenant": "p4",
+          "kubernetes.io/service-name": "postgres"
+        },
+        "annotations": {
+          "endpoints.kubernetes.io/last-change-trigger-time": "2026-10-02T05:30:56Z"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "name": "postgres",
+            "uid": "efbcca8d-1b33-4548-bf78-d30b54f094d2",
+            "controller": true,
+            "blockOwnerDeletion": true
+          }
+        ]
+      },
+      "addressType": "IPv4",
+      "endpoints": null,
+      "ports": null
+    },
+    {
+      "metadata": {
+        "name": "rabbitmq-j9spf",
+        "generateName": "rabbitmq-",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "7f22ed0f-e8b8-406e-9be6-04f3b3acc091",
+        "resourceVersion": "22095",
+        "generation": 1,
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "broker",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/part-of": "shopflow",
+          "endpointslice.kubernetes.io/managed-by": "endpointslice-controller.k8s.io",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/expires": "1791091855",
+          "heimdall.dev/generation": "1",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/stage": "dependencies",
+          "heimdall.dev/tenant": "p4",
+          "kubernetes.io/service-name": "rabbitmq"
+        },
+        "annotations": {
+          "endpoints.kubernetes.io/last-change-trigger-time": "2026-10-02T05:30:56Z"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "name": "rabbitmq",
+            "uid": "a69a6b72-910a-4aa7-a576-ffd1e750a91c",
+            "controller": true,
+            "blockOwnerDeletion": true
+          }
+        ]
+      },
+      "addressType": "IPv4",
+      "endpoints": null,
+      "ports": null
+    },
+    {
+      "metadata": {
+        "name": "redis-kk7br",
+        "generateName": "redis-",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "47855c21-879c-4630-8d5e-0a963bbed767",
+        "resourceVersion": "22099",
+        "generation": 1,
+        "creationTimestamp": "2026-10-02T05:30:56Z",
+        "labels": {
+          "app.kubernetes.io/component": "cache",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/part-of": "shopflow",
+          "endpointslice.kubernetes.io/managed-by": "endpointslice-controller.k8s.io",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/expires": "1791091855",
+          "heimdall.dev/generation": "1",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/stage": "dependencies",
+          "heimdall.dev/tenant": "p4",
+          "kubernetes.io/service-name": "redis"
+        },
+        "annotations": {
+          "endpoints.kubernetes.io/last-change-trigger-time": "2026-10-02T05:30:56Z"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "name": "redis",
+            "uid": "eabd6c29-97ad-417f-9d96-1943cd6ceb78",
+            "controller": true,
+            "blockOwnerDeletion": true
+          }
+        ]
+      },
+      "addressType": "IPv4",
+      "endpoints": null,
+      "ports": null
+    }
+  ],
+  "quotas": [
+    {
+      "metadata": {
+        "name": "heimdall-quota",
+        "namespace": "heimdall-pr409-shopflow-3e82",
+        "uid": "327b36a9-fc73-4352-ab14-ef8ac76fbb51",
+        "resourceVersion": "22133",
+        "creationTimestamp": "2026-10-02T05:30:55Z",
+        "labels": {
+          "app.kubernetes.io/component": "guardrail",
+          "app.kubernetes.io/instance": "p4-shopflow-pr409",
+          "app.kubernetes.io/managed-by": "heimdall",
+          "app.kubernetes.io/part-of": "shopflow",
+          "heimdall.dev/env": "p4-shopflow-pr409",
+          "heimdall.dev/expires": "1791091855",
+          "heimdall.dev/generation": "1",
+          "heimdall.dev/owner": "local",
+          "heimdall.dev/pr": "409",
+          "heimdall.dev/repo": "local.shopflow",
+          "heimdall.dev/stage": "guardrails",
+          "heimdall.dev/tenant": "p4"
+        },
+        "annotations": {
+          "heimdall.dev/sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      },
+      "spec": {
+        "hard": {
+          "limits.cpu": "6500m",
+          "limits.memory": "12800Mi",
+          "persistentvolumeclaims": "1",
+          "pods": "53",
+          "requests.storage": "5Gi",
+          "services.loadbalancers": "0",
+          "services.nodeports": "0"
+        }
+      },
+      "status": {
+        "hard": {
+          "limits.cpu": "6500m",
+          "limits.memory": "12800Mi",
+          "persistentvolumeclaims": "1",
+          "pods": "53",
+          "requests.storage": "5Gi",
+          "services.loadbalancers": "0",
+          "services.nodeports": "0"
+        },
+        "used": {
+          "limits.cpu": "850m",
+          "limits.memory": "1152Mi",
+          "persistentvolumeclaims": "1",
+          "pods": "3",
+          "requests.storage": "1Gi",
+          "services.loadbalancers": "0",
+          "services.nodeports": "0"
+        }
+      }
+    }
+  ]
+}

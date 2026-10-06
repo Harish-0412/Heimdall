@@ -45,6 +45,7 @@ type renderFlags struct {
 	baseDomain, scheme, gateway, storageClass, imageMirror string
 	urlPort                                                int
 	egress                                                 listFlag
+	nodeSelector                                           imageFlag // key=value
 
 	stage, outDir string
 	list          bool
@@ -79,6 +80,7 @@ func runRender(args []string, stdout, stderr io.Writer) int {
 	fs.StringVar(&f.storageClass, "storage-class", "", "storage class for the database volume (default: the cluster default)")
 	fs.Var(&f.egress, "egress-cidr", "CIDR previews may reach outside the cluster (repeatable; default none)")
 	fs.StringVar(&f.imageMirror, "image-mirror", "", "registry mirror for Heimdall's own images")
+	fs.Var(&f.nodeSelector, "node-selector", "key=value label of the preview node pool (repeatable)")
 	fs.StringVar(&f.stage, "stage", "", "print only this stage: "+stageList())
 	fs.StringVar(&f.outDir, "out-dir", "", "write one numbered file per step into this directory instead of printing")
 	fs.BoolVar(&f.list, "list", false, "print the namespace, URLs and steps instead of objects")
@@ -220,6 +222,7 @@ func (f *renderFlags) context(file string, cfg *config.Config, policy config.Pol
 		Platform: render.Platform{
 			BaseDomain: f.baseDomain, URLScheme: f.scheme, URLPort: f.urlPort, Gateway: gw,
 			StorageClassName: f.storageClass, EgressCIDRs: f.egress, ImageMirror: f.imageMirror,
+			NodeSelector: f.nodeSelector,
 		},
 	}
 	if f.generateCredentials {

@@ -23,6 +23,7 @@ import {
   RotateCcw,
   ShieldCheck,
   Sparkles,
+  Stethoscope,
   Terminal,
   Workflow,
   X,
@@ -291,6 +292,18 @@ function Docs({ onClose }: { onClose: () => void }) {
             text: "The five stages, generated objects and secure pod defaults.",
             url: "rendering.md",
             icon: Layers3,
+          },
+          {
+            title: "In-cluster agent",
+            text: "PreviewEnvironment objects, self-healing, fencing and safe cleanup.",
+            url: "agent.md",
+            icon: Workflow,
+          },
+          {
+            title: "Diagnostics",
+            text: "Stable failure codes, root-cause ranking and what to do next.",
+            url: "diagnostics.md",
+            icon: Stethoscope,
           },
           {
             title: "Project roadmap",

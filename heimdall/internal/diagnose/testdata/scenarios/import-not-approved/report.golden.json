@@ -1,0 +1,14 @@
+{
+  "namespace": "heimdall-pr412-shopflow-f95d",
+  "generation": 1,
+  "diagnoses": [
+    {
+      "code": "POLICY_DENIED",
+      "severity": "error",
+      "title": "Denied by policy",
+      "summary": "approved digest does not match the imported data",
+      "subject": "data import",
+      "suggestion": "Imports must be operator-approved and sanitised, and match the approved SHA-256 exactly (docs/engine.md). Re-approve the exact bytes, or remove the import."
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "namespace": "heimdall-pr403-shopflow-01d4",
+  "generation": 1,
+  "diagnoses": [
+    {
+      "code": "OUT_OF_MEMORY",
+      "severity": "error",
+      "title": "Out of memory",
+      "summary": "notifications was killed for exceeding its 128Mi memory limit (2 restarts)",
+      "subject": "deployment/notifications",
+      "workload": "notifications",
+      "stage": "application",
+      "suggestion": "Raise `resources.memory` for notifications in heimdall.yaml, or find what makes it use more memory than in production (a cache without a bound, loading a whole table).",
+      "evidence": [
+        "container notifications: OOMKilled, exit code 137"
+      ]
+    }
+  ]
+}

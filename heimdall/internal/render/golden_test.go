@@ -23,7 +23,7 @@ var goldenScenarios = []struct {
 	seed   string // file with the seed content, when not the default stub
 	edit   func(*Context)
 }{
-	{name: "shopflow", config: shopflowConfig, seed: "../../examples/shopflow/fixtures/dev.sql"},
+	{name: "shopflow", config: shopflowConfig},
 	{name: "minimal", config: "testdata/configs/minimal.yaml"},
 	{name: "postgres-only", config: "testdata/configs/postgres-only.yaml"},
 	{name: "prebuilt-images", config: "testdata/configs/prebuilt-images.yaml"},

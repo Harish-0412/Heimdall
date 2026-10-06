@@ -3,6 +3,12 @@
   "title": "heimdall-agent values",
   "type": "object",
   "additionalProperties": false,
+  "definitions": {
+    "duration": {"type": "string", "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|ms|s|m|h))+$"},
+    "quantity": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(m|k|M|G|T|Ki|Mi|Gi|Ti)?$"},
+    "port": {"type": "integer", "minimum": 1024, "maximum": 65535},
+    "stringMap": {"type": "object", "additionalProperties": {"type": "string"}}
+  },
   "properties": {
     "global": {"type": "object"},
     "image": {
@@ -20,27 +26,107 @@
       "type": "array",
       "items": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}
     },
-    "replicaCount": {"type": "integer", "const": 1},
-    "clusterName": {"type": "string"},
-    "controlPlane": {
+    "replicaCount": {"type": "integer", "minimum": 1, "maximum": 3},
+    "logLevel": {"enum": ["debug", "info", "warn", "error"]},
+    "source": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "url": {"type": "string", "pattern": "^(https://.+)?$"},
-        "credentialsSecret": {"type": "string"}
+        "type": {"enum": ["cluster", "configmap"]},
+        "configMap": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$", "maxLength": 253},
+        "key": {"type": "string", "pattern": "^[-._a-zA-Z0-9]+$"},
+        "syncInterval": {"$ref": "#/definitions/duration"}
+      },
+      "required": ["type"]
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "baseDomain": {"type": "string"},
+        "urlScheme": {"enum": ["http", "https"]},
+        "urlPort": {"type": "integer", "minimum": 0, "maximum": 65535},
+        "gateway": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "namespace": {"type": "string"},
+            "name": {"type": "string"},
+            "sectionName": {"type": "string"}
+          }
+        },
+        "ingressPeers": {"type": "array", "items": {"type": "object"}},
+        "dnsPeers": {"type": "array", "items": {"type": "object"}},
+        "egressCIDRs": {"type": "array", "items": {"type": "string"}},
+        "storageClassName": {"type": "string"},
+        "nodeSelector": {"$ref": "#/definitions/stringMap"},
+        "tolerations": {"type": "array", "items": {"type": "object"}},
+        "runtimeClassName": {"type": "string"},
+        "imageMirror": {"type": "string"},
+        "writableRootFilesystem": {"type": "boolean"}
       }
     },
-    "previewNamespacePrefix": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?-$", "maxLength": 20},
-    "logLevel": {"enum": ["debug", "info", "warn", "error"]},
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxServices": {"type": "integer", "minimum": 1},
+        "maxWorkers": {"type": "integer", "minimum": 0},
+        "maxContainerCPU": {"$ref": "#/definitions/quantity"},
+        "maxContainerMemory": {"$ref": "#/definitions/quantity"},
+        "maxTotalCPU": {"$ref": "#/definitions/quantity"},
+        "maxTotalMemory": {"$ref": "#/definitions/quantity"},
+        "maxPostgresStorage": {"$ref": "#/definitions/quantity"},
+        "minMemoryRequestPercent": {"type": "integer", "minimum": 0, "maximum": 100},
+        "minTTL": {"$ref": "#/definitions/duration"},
+        "maxTTL": {"$ref": "#/definitions/duration"},
+        "maxVisibility": {"enum": ["private", "org", "public"]},
+        "allowLargeSize": {"type": "boolean"},
+        "allowedSecrets": {"type": ["array", "null"], "items": {"type": "string", "minLength": 1}},
+        "allowedRegistries": {"type": ["array", "null"], "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxConcurrent": {"type": "integer", "minimum": 1, "maximum": 64},
+        "stepTimeout": {"$ref": "#/definitions/duration"},
+        "resyncInterval": {"$ref": "#/definitions/duration"},
+        "maxBackoff": {"$ref": "#/definitions/duration"}
+      }
+    },
+    "sweeper": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "dryRun": {"type": "boolean"},
+        "interval": {"$ref": "#/definitions/duration"},
+        "gracePeriod": {"$ref": "#/definitions/duration"}
+      }
+    },
     "rbac": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {"clusterWideRead": {"type": "boolean"}}
+      "properties": {
+        "clusterWideRead": {"type": "boolean"},
+        "aggregateToDefaultRoles": {"type": "boolean"}
+      }
     },
     "admissionPolicy": {
       "type": "object",
       "additionalProperties": false,
       "properties": {"enabled": {"type": "boolean"}}
+    },
+    "webhook": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "port": {"$ref": "#/definitions/port"},
+        "failurePolicy": {"enum": ["Fail", "Ignore"]},
+        "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": 30}
+      }
     },
     "serviceAccount": {
       "type": "object",
@@ -48,25 +134,28 @@
       "properties": {
         "create": {"type": "boolean"},
         "name": {"type": "string"},
-        "annotations": {"type": "object", "additionalProperties": {"type": "string"}}
+        "annotations": {"$ref": "#/definitions/stringMap"}
       }
     },
     "resources": {"type": "object"},
-    "podAnnotations": {"type": "object", "additionalProperties": {"type": "string"}},
-    "podLabels": {"type": "object", "additionalProperties": {"type": "string"}},
-    "nodeSelector": {"type": "object", "additionalProperties": {"type": "string"}},
+    "podAnnotations": {"$ref": "#/definitions/stringMap"},
+    "podLabels": {"$ref": "#/definitions/stringMap"},
+    "nodeSelector": {"$ref": "#/definitions/stringMap"},
     "tolerations": {"type": "array"},
     "affinity": {"type": "object"},
     "priorityClassName": {"type": "string"},
     "metrics": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {"port": {"type": "integer", "minimum": 1024, "maximum": 65535}}
+      "properties": {
+        "port": {"$ref": "#/definitions/port"},
+        "secure": {"type": "boolean"}
+      }
     },
     "probes": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {"port": {"type": "integer", "minimum": 1024, "maximum": 65535}}
+      "properties": {"port": {"$ref": "#/definitions/port"}}
     },
     "networkPolicy": {
       "type": "object",

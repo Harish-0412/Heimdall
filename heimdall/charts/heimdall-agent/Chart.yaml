@@ -1,14 +1,15 @@
 apiVersion: v2
 name: heimdall-agent
 description: >-
-  Installs the Heimdall agent, which creates and cleans up pull-request
-  preview environments in this cluster. The agent connects out to the Heimdall
-  control plane; nothing connects in.
+  Installs the Heimdall agent, which creates, repairs and cleans up
+  pull-request preview environments in this cluster from PreviewEnvironment
+  objects (heimdall.dev/v1alpha1). It connects out to the Kubernetes API;
+  only the API server (admission webhook) and a metrics scraper connect in.
 type: application
 # Chart version (SemVer). Bump on every chart change.
-version: 0.1.0
+version: 0.2.0
 # Version of the agent image this chart deploys by default.
-appVersion: "0.1.0"
+appVersion: "0.3.0"
 # ValidatingAdmissionPolicy (the agent's write scope) is GA since 1.30.
 kubeVersion: ">=1.30.0-0"
 home: https://github.com/heimdall-dev/heimdall

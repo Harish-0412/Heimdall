@@ -1,0 +1,14 @@
+{
+  "namespace": "heimdall-pr414-shopflow-3ed9",
+  "generation": 1,
+  "diagnoses": [
+    {
+      "code": "STALE_GENERATION",
+      "severity": "warning",
+      "title": "Superseded by a newer generation",
+      "summary": "generation 1 is older than generation 2, which this preview already accepted",
+      "subject": "generation/1",
+      "suggestion": "A newer push superseded this one; its results were discarded on purpose. Nothing to fix: look at the newest generation."
+    }
+  ]
+}

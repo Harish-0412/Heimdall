@@ -1,0 +1,30 @@
+{
+  "namespace": "heimdall-pr402-shopflow-a65a",
+  "generation": 1,
+  "diagnoses": [
+    {
+      "code": "MIGRATION_FAILED",
+      "severity": "error",
+      "title": "Database migration failed",
+      "summary": "Migration failed: column \"owner_id\" of relation \"catalog_snapshot\" contains null values (SQLSTATE 23502)",
+      "subject": "job/heimdall-migrate-g1",
+      "workload": "heimdall-migrate",
+      "stage": "baseline-db",
+      "suggestion": "Column `owner_id` was added to `catalog_snapshot` as NOT NULL without a default, but `catalog_snapshot` already has rows. Give the column a DEFAULT, or add it as nullable, backfill it, and SET NOT NULL in a later migration.",
+      "evidence": [
+        "Job BackoffLimitExceeded: Job has reached the specified backoff limit",
+        "error: column \"owner_id\" of relation \"catalog_snapshot\" contains null values",
+        "  code: '23502',",
+        "  table: 'catalog_snapshot',",
+        "  column: 'owner_id',"
+      ],
+      "sql": {
+        "state": "23502",
+        "name": "not_null_violation",
+        "message": "column \"owner_id\" of relation \"catalog_snapshot\" contains null values",
+        "table": "catalog_snapshot",
+        "column": "owner_id"
+      }
+    }
+  ]
+}

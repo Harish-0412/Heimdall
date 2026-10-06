@@ -1,0 +1,514 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: previewenvironments.heimdall.dev
+spec:
+  group: heimdall.dev
+  names:
+    categories:
+    - heimdall
+    kind: PreviewEnvironment
+    listKind: PreviewEnvironmentList
+    plural: previewenvironments
+    shortNames:
+    - pe
+    - preview
+    singular: previewenvironment
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.repository
+      name: Repository
+      type: string
+    - jsonPath: .spec.pullRequest
+      name: PR
+      type: integer
+    - jsonPath: .spec.generation
+      name: Generation
+      type: integer
+    - jsonPath: .status.deployedGeneration
+      name: Deployed
+      type: integer
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.urls[?(@.primary==true)].url
+      name: URL
+      priority: 1
+      type: string
+    - jsonPath: .status.lastError.code
+      name: Error
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: PreviewEnvironment is one pull request's preview environment.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              PreviewEnvironmentSpec is the desired state of one preview environment for
+              this cluster. It is a projection of the control plane's record (ADR 0005):
+              the agent writes it from an authoritative source, or an operator applies it
+              directly when the cluster itself is the source (docs/agent.md).
+            properties:
+              commit:
+                description: Commit is the full commit SHA being previewed.
+                pattern: ^([0-9a-f]{40}|[0-9a-f]{64})$
+                type: string
+              config:
+                description: Config is the heimdall.yaml to deploy.
+                properties:
+                  inline:
+                    description: Inline is the heimdall.yaml document, at most 256
+                      KiB.
+                    maxLength: 262144
+                    minLength: 1
+                    type: string
+                  sha256:
+                    description: SHA256 is the lowercase hex SHA-256 of Inline.
+                    pattern: ^[a-f0-9]{64}$
+                    type: string
+                required:
+                - inline
+                - sha256
+                type: object
+              data:
+                description: |-
+                  Data is an optional operator-approved, sanitised database import
+                  (ADR 0009). Synthetic data is not supported.
+                properties:
+                  approval:
+                    description: Approval is the operator's attestation, bound to
+                      the exact bytes.
+                    properties:
+                      approvedBy:
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      reason:
+                        maxLength: 1024
+                        minLength: 1
+                        type: string
+                      sanitised:
+                        description: Sanitised must be true.
+                        type: boolean
+                        x-kubernetes-validations:
+                        - message: only sanitised data can be imported
+                          rule: self == true
+                      sha256:
+                        description: SHA256 of the approved bytes.
+                        pattern: ^[a-f0-9]{64}$
+                        type: string
+                    required:
+                    - approvedBy
+                    - reason
+                    - sanitised
+                    - sha256
+                    type: object
+                  configMap:
+                    description: ConfigMap is the ConfigMap's name.
+                    maxLength: 253
+                    pattern: ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$
+                    type: string
+                  key:
+                    description: Key is the entry holding the SQL.
+                    maxLength: 253
+                    pattern: ^[-._a-zA-Z0-9]+$
+                    type: string
+                required:
+                - approval
+                - configMap
+                - key
+                type: object
+              desiredState:
+                default: Running
+                description: |-
+                  DesiredState is Running (default) or Destroyed. Destroyed removes every
+                  resource but keeps this object; deleting the object also destroys.
+                enum:
+                - Running
+                - Destroyed
+                type: string
+              environmentID:
+                description: EnvironmentID identifies the environment across generations.
+                maxLength: 63
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                type: string
+                x-kubernetes-validations:
+                - message: environmentID is immutable
+                  rule: self == oldSelf
+              expiresAt:
+                description: |-
+                  ExpiresAt is when the environment expires. Recorded as metadata; TTL
+                  enforcement arrives in P8.
+                format: date-time
+                type: string
+              generation:
+                description: |-
+                  Generation is the deployment generation (ADR 0005), distinct from
+                  metadata.generation: it changes only when deployment inputs change, and
+                  never decreases. Work for an older generation is cancelled, and its
+                  results are discarded.
+                format: int64
+                minimum: 1
+                type: integer
+              images:
+                additionalProperties:
+                  type: string
+                description: Images maps each service and worker to its image, pinned
+                  by digest.
+                maxProperties: 16
+                type: object
+              owner:
+                description: Owner is the GitHub login of the pull request's author
+                  (metadata).
+                pattern: ^[A-Za-z0-9][A-Za-z0-9-]{0,38}(\[bot\])?$
+                type: string
+              pullRequest:
+                description: PullRequest is the pull request number.
+                format: int64
+                maximum: 99999999
+                minimum: 1
+                type: integer
+                x-kubernetes-validations:
+                - message: pullRequest is immutable
+                  rule: self == oldSelf
+              repository:
+                description: Repository is the GitHub repository as owner/name.
+                maxLength: 140
+                pattern: ^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$
+                type: string
+                x-kubernetes-validations:
+                - message: repository is immutable
+                  rule: self == oldSelf
+              resetNonce:
+                default: 0
+                description: |-
+                  ResetNonce requests a reset of the environment's data to its baseline
+                  whenever it increases. It never decreases.
+                format: int64
+                minimum: 0
+                type: integer
+              tenant:
+                description: Tenant is the tenant's slug.
+                pattern: ^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$
+                type: string
+                x-kubernetes-validations:
+                - message: tenant is immutable
+                  rule: self == oldSelf
+              urlSuffix:
+                description: URLSuffix makes preview hostnames hard to guess; random
+                  per environment.
+                pattern: ^[a-z0-9]{4,8}$
+                type: string
+                x-kubernetes-validations:
+                - message: urlSuffix is immutable
+                  rule: self == oldSelf
+            required:
+            - commit
+            - config
+            - environmentID
+            - expiresAt
+            - generation
+            - owner
+            - pullRequest
+            - repository
+            - tenant
+            - urlSuffix
+            type: object
+            x-kubernetes-validations:
+            - message: spec.generation must not decrease
+              rule: self.generation >= oldSelf.generation
+            - message: changed deployment inputs (commit, config, images or data)
+                require a higher spec.generation
+              rule: 'self.generation > oldSelf.generation || (self.commit == oldSelf.commit
+                && self.config == oldSelf.config && (has(self.images) ? (has(oldSelf.images)
+                && self.images == oldSelf.images) : !has(oldSelf.images)) && (has(self.data)
+                ? (has(oldSelf.data) && self.data == oldSelf.data) : !has(oldSelf.data)))'
+            - message: spec.resetNonce must not decrease
+              rule: self.resetNonce >= oldSelf.resetNonce
+          status:
+            description: PreviewEnvironmentStatus is the observed state, written only
+              by the agent.
+            properties:
+              completedResetNonce:
+                description: CompletedResetNonce is the last reset nonce that completed.
+                format: int64
+                type: integer
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              deployedGeneration:
+                description: |-
+                  DeployedGeneration is the deployment generation last applied
+                  successfully, end to end.
+                format: int64
+                type: integer
+              diagnoses:
+                description: |-
+                  Diagnoses explain the last failure, most likely root cause first
+                  (docs/diagnostics.md). Cleared when an operation succeeds.
+                items:
+                  description: |-
+                    DiagnosisStatus is one diagnosis of a failure: a stable public code, what
+                    is wrong and what to do. Evidence is redacted and kept short.
+                  properties:
+                    code:
+                      maxLength: 64
+                      type: string
+                    evidence:
+                      items:
+                        maxLength: 256
+                        type: string
+                      maxItems: 10
+                      type: array
+                    stage:
+                      maxLength: 64
+                      type: string
+                    subject:
+                      maxLength: 253
+                      type: string
+                    suggestion:
+                      maxLength: 1024
+                      type: string
+                    summary:
+                      maxLength: 1024
+                      type: string
+                  required:
+                  - code
+                  - suggestion
+                  - summary
+                  type: object
+                maxItems: 5
+                type: array
+              lastError:
+                description: ErrorStatus is the last failure, with a stable public
+                  code.
+                properties:
+                  at:
+                    format: date-time
+                    type: string
+                  code:
+                    type: string
+                  generation:
+                    description: Generation the failure belongs to.
+                    format: int64
+                    type: integer
+                  message:
+                    type: string
+                  retryable:
+                    description: |-
+                      Retryable failures are retried with exponential backoff; others wait
+                      for new input (a higher generation or reset nonce).
+                    type: boolean
+                  step:
+                    type: string
+                required:
+                - at
+                - code
+                - generation
+                - message
+                - retryable
+                type: object
+              namespace:
+                description: Namespace holds the environment's resources.
+                type: string
+              observedGeneration:
+                description: ObservedGeneration is the metadata.generation last reconciled.
+                format: int64
+                type: integer
+              operation:
+                description: OperationStatus describes the current or most recent
+                  engine operation.
+                properties:
+                  attempts:
+                    description: |-
+                      Attempts counts consecutive failed attempts at this operation; it
+                      drives exponential backoff and resets on success or new input.
+                    format: int32
+                    type: integer
+                  completedAt:
+                    format: date-time
+                    type: string
+                  generation:
+                    description: Generation is the deployment generation the operation
+                      works on.
+                    format: int64
+                    type: integer
+                  resetNonce:
+                    format: int64
+                    type: integer
+                  result:
+                    description: OperationResult is how an operation ended, or Running.
+                    enum:
+                    - Queued
+                    - Running
+                    - Succeeded
+                    - Failed
+                    - Cancelled
+                    - Interrupted
+                    type: string
+                  retryAfter:
+                    description: |-
+                      RetryAfter is when a failed or interrupted operation may run again
+                      (exponential backoff). Unset when no retry is pending.
+                    format: date-time
+                    type: string
+                  startedAt:
+                    format: date-time
+                    type: string
+                  type:
+                    description: OperationType is the kind of engine operation.
+                    enum:
+                    - Apply
+                    - Reset
+                    - Destroy
+                    type: string
+                required:
+                - generation
+                - result
+                - startedAt
+                - type
+                type: object
+              phase:
+                description: |-
+                  Phase summarises the environment for humans and dashboards. Conditions are
+                  the detailed, machine-readable state.
+                enum:
+                - Pending
+                - Queued
+                - Provisioning
+                - Ready
+                - Degraded
+                - Resetting
+                - Failed
+                - Destroying
+                - Destroyed
+                type: string
+              steps:
+                description: Steps of the current or last operation, in order (bounded).
+                items:
+                  description: StepStatus is one engine step of the current or last
+                    operation.
+                  properties:
+                    code:
+                      type: string
+                    durationSeconds:
+                      format: int64
+                      type: integer
+                    name:
+                      type: string
+                    startedAt:
+                      format: date-time
+                      type: string
+                    state:
+                      type: string
+                  required:
+                  - name
+                  - state
+                  type: object
+                maxItems: 64
+                type: array
+              urls:
+                items:
+                  description: URL is a public service's preview URL.
+                  properties:
+                    primary:
+                      type: boolean
+                    service:
+                      type: string
+                    url:
+                      type: string
+                  required:
+                  - service
+                  - url
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

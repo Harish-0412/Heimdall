@@ -184,7 +184,12 @@ tests); supported dependency versions must be pinned and agree with
 
 ---
 
-## P2 - Local engine and data lifecycle (`up`, `down`, `reset`, `logs`, `status`)
+## P2 - Local engine and data lifecycle (`up`, `down`, `reset`, `logs`, `status`) (DONE)
+
+Implementation and verification: [engine.md](engine.md). [ADR 0009](adr/0009-local-engine-and-data-provenance.md)
+supersedes the old synthetic-seed allowance and clarifies the reset maintenance
+window. The engine's integration tests use a real kind API server and actual
+ShopFlow/PostgreSQL/Redis/RabbitMQ processes, without synthetic application data.
 
 **Goal:** an idempotent library that drives a namespace to a `Spec`, wrapped in a
 CLI. The controller in P3 is this engine plus Kubernetes plumbing.
@@ -200,7 +205,7 @@ CLI. The controller in P3 is this engine plus Kubernetes plumbing.
 - **Baseline and live database (revised):**
   ```text
   start PostgreSQL -> create baseline DB -> run migration Job
-  -> load synthetic seed Job -> freeze baseline (template, connections denied)
+  -> optional approved sanitised import -> freeze baseline (template, connections denied)
   -> clone live DB from baseline
   ```
 - **Reset (revised to avoid races):**
@@ -212,8 +217,8 @@ CLI. The controller in P3 is this engine plus Kubernetes plumbing.
   -> resume API + workers -> wait ready -> run smoke check
   ```
   Reset is a single audited operation with its own stage events.
-- **No synthetic-data shortcuts:** MVP uses only synthetic seed data or manually
-  approved sanitised data; the seed loader rejects production-looking connection
+- **No synthetic data:** databases are schema-only unless manually approved
+  sanitised data is supplied with a content-bound operator attestation; the seed loader rejects production-looking connection
   strings/hosts and refuses to run outside a Heimdall namespace.
 - **Force cleanup is break-glass (revised):** normal `Destroy` never force-deletes.
   A stuck namespace surfaces as a failed `destroying` state with a diagnosis. An
@@ -222,9 +227,12 @@ CLI. The controller in P3 is this engine plus Kubernetes plumbing.
 - CLI refuses kube-contexts not on an allowlist (prevents running `down` against
   a real cluster by accident).
 
-**Tests:** engine against fake clients; `envtest` for apply/prune/delete; kind
-e2e (permanent CI): *two PRs side by side, mutate data in one, other unaffected,
-reset one while its API is under load without errors, destroy one, other survives.*
+**Tests:** policy and redaction unit tests; real Kubernetes API tests for journal
+concurrency, fencing, pruning and watch deadlines; kind e2e (permanent CI): *two
+PRs side by side, copy live database catalog metadata in one, other unaffected,
+reset and recover, recreate Postgres storage, prune, destroy one, other survives.*
+Reset intentionally stops API pods; zero-error traffic during that interval
+requires gateway admission/buffering beyond P2 (ADR 0009).
 
 **Exit criteria:** the demo from the brief runs from the CLI on kind (port-forward
 or `*.localtest.me` for URLs). Stage timings are recorded as a baseline for the
@@ -232,7 +240,67 @@ time-to-ready SLO.
 
 ---
 
-## P3 - Agent, controller and `PreviewEnvironment` CRD
+## P3 - Agent, controller and `PreviewEnvironment` CRD (DONE)
+
+**Delivered** (reference: [agent.md](agent.md), [ADR 0010](adr/0010-agent-controller.md)):
+
+- `cmd/agent` (distroless, non-root, multi-arch image `build/agent/Dockerfile`):
+  controller, desired-state syncer, sweeper, admission webhook, leader
+  election, `/healthz` `/readyz`, authenticated HTTPS metrics. Installed by
+  `charts/heimdall-agent` 0.2.0, whose rendered configuration is checked by the
+  agent's own strict parser (`--check-config`) in `make helm-lint`.
+- CRD `PreviewEnvironment` (`heimdall.dev/v1alpha1`): the spec carries the
+  inline config with its SHA-256, digest-pinned images, identity, explicit
+  `generation`, `desiredState: Running | Destroyed` (`Sleeping` rejected until
+  P8) and `resetNonce`. CEL rules: immutable identity, `generation` and
+  `resetNonce` never decrease, changed inputs need a higher generation. Status:
+  phase, per-stage conditions, URLs, observed/deployed generation, operation,
+  steps, last error (code + message). `heimdall manifest` prints a
+  ready-to-apply object from a `heimdall.yaml`.
+- Reconciler: level-triggered and idempotent; operations run asynchronously
+  with bounded concurrency and stream steps into status; exponential backoff
+  for retryable failures, terminal failures wait for new input; finalizer
+  destroys before release; Degraded environments self-heal; interrupted work
+  resumes (including a same-generation repair); a dead agent's journal lease is
+  waited out without reporting a failure.
+- Generation fencing on the spec alone: N+1, reset or deletion cancels N; a
+  late result is discarded (`StaleResultDiscarded`).
+- Pluggable sources: `cluster` (kubectl apply) and `configmap`/`file`
+  (`DesiredState` document, synced by server-side apply). A source error is
+  never "empty".
+- Fail-safe sweeper: ownership labels + grace period + second pass (same UID) +
+  authoritative read of both source and objects; source down means no
+  deletions; dry-run reports only.
+- Admission: webhook reusing `internal/config` with the tenant policy and a
+  full render; self-managed CA and serving certificate; fails closed. A third
+  ValidatingAdmissionPolicy reserves status (and, for document sources, the
+  objects) to the agent. The agent verifies its namespace policy is enforced
+  before acting (P1 carry-forward).
+- Security fix found on the way: the renderer treated an empty peer list as
+  "use the default" only when nil; an empty `ingressPeers: []` from values
+  would have rendered a NetworkPolicy rule allowing every peer. Fixed, with a
+  regression test.
+
+**Verified:**
+- envtest (real API server, `-race`): create → Ready, spec change → rollout,
+  delete → finalizer cleanup, delete waits for a successful destroy, crash
+  mid-stage → resume, crash mid-repair → resume, stale generation fenced, held
+  lock waited out, backoff, terminal failure, reset nonce, Destroyed and back,
+  Degraded self-heal, guard, invalid spec; CRD CEL rules; syncer; sweeper
+  (including source unreachable); webhook and certificates.
+- kind, real agent image and chart (`make e2e-agent`): admission
+  rejections (invalid config, digest mismatch, unpinned image, `Sleeping`);
+  kubectl apply → Ready, rollout with pruning of the old generation, reset,
+  delete → namespace gone; status writes by anyone else denied; N+1 cancels N;
+  the leader killed (SIGKILL and pod deletion, alternating) in each of the
+  five stages and during destroy, converging every time; a hand-labelled orphan
+  kept for the 90s grace period and removed after it; no deletion while the
+  configmap source was unreachable (2.5 min), then removal once it returned;
+  the configmap source creating and removing an environment; metrics rejecting
+  unauthenticated scrapes; and (with P4) a failed migration recorded as
+  `MIGRATION_FAILED` in `status.diagnoses`, then cleared by the fixed generation.
+
+### Original plan
 
 **Goal:** declarative, self-healing, **outbound-only** environments with
 guaranteed cleanup (ADR 0004/0005).
@@ -274,7 +342,94 @@ after the grace period and not at all when the source is down.
 
 ---
 
-## P4 - Diagnostics engine ("what failed and what do I do")
+## P4 - Diagnostics engine ("what failed and what do I do") (DONE)
+
+Completion audit and follow-up fixes: [Phase 4 completion review](phase4-completion-review.md).
+
+**Delivered** (reference: [diagnostics.md](diagnostics.md), [ADR 0011](adr/0011-diagnostics.md)):
+
+- `internal/diagnose`: `Diagnose(Snapshot) Report`, pure and deterministic;
+  `Collect` captures the snapshot (pods, events, Jobs, Deployments,
+  StatefulSets, services, endpoint slices, quotas, HTTPRoutes with the
+  Gateway's verdict, log tails, the engine's recorded failure and accepted
+  generation) from one preview namespace. A failure refused before anything
+  existed is diagnosed from the failure alone.
+- Ingress: a route the Gateway rejected (hostname outside its listener,
+  namespace not admitted, unknown listener, unresolvable backend) is a
+  `NO_ENDPOINTS` error naming the dead URL, even when every workload is Ready.
+- The fourteen planned codes plus `UNCLASSIFIED`, so no failure goes without a
+  diagnosis. Each diagnosis: code, title, specific summary, suggestion naming
+  the `heimdall.yaml` field to change, subject, stage, short evidence.
+- PostgreSQL error parsing for node-postgres, psql, pgx, psycopg, Rails,
+  Prisma and Flyway: `23502` (both forms), `42701`, `42P07`, `42601`, plus
+  `42P01`, `42703`, `23505`, `23503`, `28P01`, `3D000`, with table, column,
+  relation and token-specific suggestions.
+- Root-cause ranking by stage, then tier, then dependencies first; symptoms
+  of an explained cause are suppressed; only the current generation counts.
+- `internal/redact`, shared with `heimdall logs`: injected values first
+  (verbatim, base64, URL-encoded), patterns as a safety net, PostgreSQL row
+  values in error details; no logs at all if the injected values cannot be
+  read; capped tails, evidence and events; environment values and managed
+  fields never captured.
+- Renderers: CLI text, JSON, PR-comment markdown in which app output cannot
+  inject markdown or HTML.
+- Wiring: `heimdall diagnose` (live or `--snapshot`, `--save-snapshot`);
+  `heimdall up`/`reset` explain their failures (`--save-snapshot` keeps the
+  snapshot); the agent records `status.diagnoses`, the root cause in `Ready`
+  and a `Diagnosed` event. `--node-selector` gives the CLI the agent's
+  `platform.nodeSelector`.
+- Fail fast: the engine stops waiting for a workload whose pods cannot recover
+  (crash loop, repeated OOM, persistent pull failure, configuration error):
+  `engine.workload_failed` instead of a 10-minute timeout.
+- Fixed on the way: a worker (no health check) counted as ready the moment it
+  started, so one that crashed or ran out of memory a second later passed
+  `up`. Workers now need `minReadySeconds: 10` and the engine waits for
+  *available* replicas.
+
+**Verified:**
+- Unit: every rule; the SQL parser on real client output; ranking across
+  stages; symptom suppression; liveness kills; renderers (exact PR-comment and
+  CLI text, markdown injection); `Blocked` thresholds; the engine watchdog;
+  redaction of planted secrets through `Collect` (env values, args, events,
+  termination messages, base64 forms) and no logs without secret values.
+- Golden fixtures captured from the real failures below
+  (`internal/diagnose/testdata/scenarios`): expected root cause, exact JSON,
+  PR comment and CLI text; noise immunity (routine events, a previous
+  generation's failed migration, terminating pods, events about deleted
+  objects: identical report).
+- envtest: the agent records diagnoses on failure and clears them on success;
+  a rejected config is diagnosed without engine calls.
+- kind (`make e2e-diagnose`, with a real Gateway controller): ShopFlow broken
+  fifteen ways, one per diagnosis code, each through `heimdall up` (which
+  explains the failure) and `heimdall diagnose`; no credential value in any
+  captured snapshot:
+
+  | Break | Root cause and summary |
+  |---|---|
+  | image digest never pushed | `IMAGE_PULL_FAILED`: The migration Job cannot pull image ...: it does not exist in the registry |
+  | NOT NULL column added to a table with rows | `MIGRATION_FAILED`: column "owner_id" of relation "catalog_snapshot" contains null values (SQLSTATE 23502) |
+  | worker exceeding 128Mi | `OUT_OF_MEMORY`: notifications was killed for exceeding its 128Mi memory limit |
+  | worker command typo | `CONTAINER_CRASH`: notifications exits with code 1, 3 restarts: Error: Cannot find module '/app/src/notifier.js' |
+  | smoke test calling a missing route | `SMOKE_TEST_FAILED`: GET /orders/latest-report on api returned HTTP 404 |
+  | `health.path` that does not exist | `HEALTHCHECK_FAILED`: GET /healthz on port 8080 returns HTTP 404 |
+  | web scaled to 40 replicas | `QUOTA_EXCEEDED`: web cannot create pods: the preview's resource quota is exhausted |
+  | base domain outside the Gateway listener | `NO_ENDPOINTS`: http://pr408-... is not served: Gateway heimdall-gateway/heimdall (listener http) rejected route web (NoMatchingListenerHostname) |
+  | preview node pool with no nodes | `NO_CAPACITY`: rabbitmq cannot be scheduled: no node matches the preview node pool |
+  | PostgreSQL scaled to zero | `DB_UNREACHABLE`: PostgreSQL is not running (statefulset/postgres is scaled to zero): api cannot reach it |
+  | approved import reading a missing table | `SEED_FAILED`: relation "legacy_products" does not exist (SQLSTATE 42P01) |
+  | import bytes differ from the approval | `POLICY_DENIED`: approved digest does not match the imported data (refused before anything was created) |
+  | a secret the tenant never configured | `CONFIG_INVALID`: The migration Job cannot start: it needs the secret `PAYMENTS_API_KEY`, which this tenant has not configured |
+  | generation 1 after generation 2 | `STALE_GENERATION`: generation 1 is older than generation 2, which this preview already accepted |
+  | a migration that never finishes | `UNCLASSIFIED`: step baseline-db/migrate did not finish within the step timeout: job/heimdall-migrate-g1 was still running |
+
+  The real failures also corrected the engine and the rules: crash loops
+  reported as `Terminated` between restarts now stop the wait at the third
+  restart (it took up to five); a stopped PostgreSQL is reported as the cause
+  rather than its Service's missing endpoints; a Job pod that cannot start is
+  diagnosed (its Job never fails); an error printed before a long object dump
+  is kept in the evidence; a refusal before anything is created is explained.
+
+### Original plan
 
 *Can be developed in parallel with P3: it is a pure function over recorded
 snapshots.*

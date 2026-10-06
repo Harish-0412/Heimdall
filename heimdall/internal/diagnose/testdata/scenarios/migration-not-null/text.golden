@@ -1,0 +1,11 @@
+MIGRATION_FAILED: Database migration failed (job/heimdall-migrate-g1, stage baseline-db)
+  Migration failed: column "owner_id" of relation "catalog_snapshot" contains null values (SQLSTATE 23502)
+
+  What to do: Column `owner_id` was added to `catalog_snapshot` as NOT NULL without a default, but `catalog_snapshot` already has rows. Give the column a DEFAULT, or add it as nullable, backfill it, and SET NOT NULL in a later migration.
+
+  Evidence:
+    | Job BackoffLimitExceeded: Job has reached the specified backoff limit
+    | error: column "owner_id" of relation "catalog_snapshot" contains null values
+    |   code: '23502',
+    |   table: 'catalog_snapshot',
+    |   column: 'owner_id',

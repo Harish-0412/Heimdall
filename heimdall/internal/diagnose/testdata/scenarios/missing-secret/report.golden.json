@@ -1,0 +1,19 @@
+{
+  "namespace": "heimdall-pr413-shopflow-002f",
+  "generation": 1,
+  "diagnoses": [
+    {
+      "code": "CONFIG_INVALID",
+      "severity": "error",
+      "title": "Configuration is invalid",
+      "summary": "The migration Job cannot start: it needs the secret `PAYMENTS_API_KEY`, which this tenant has not configured",
+      "subject": "job/heimdall-migrate-g1",
+      "workload": "heimdall-migrate",
+      "stage": "baseline-db",
+      "suggestion": "heimdall.yaml lists `PAYMENTS_API_KEY` under `secrets:`, but the platform delivers no such secret to this preview. Add it to the tenant's secrets, or remove it from `secrets:`.",
+      "evidence": [
+        "CreateContainerConfigError: secret \"heimdall-app-secrets\" not found"
+      ]
+    }
+  ]
+}

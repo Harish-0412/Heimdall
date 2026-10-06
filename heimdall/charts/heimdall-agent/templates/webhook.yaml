@@ -1,0 +1,67 @@
+{{- /*
+Validating admission webhook for PreviewEnvironments: the same configuration
+checks and tenant policy the agent applies before deploying
+(internal/webhook), so a bad spec is rejected at kubectl apply. The agent
+issues its own CA and serving certificate into the Secret below and injects
+the CA into this configuration (caBundle is deliberately not set here, and
+Helm leaves it alone on upgrades). It fails closed.
+*/ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "heimdall-agent.webhookService" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "heimdall-agent.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: webhook
+      port: 443
+      targetPort: webhook
+      protocol: TCP
+---
+# Created empty so the agent needs only get/update on this one Secret (RBAC
+# cannot scope "create" by name). The agent fills it on first start and
+# renews it; upgrades leave the data alone because the chart never sets any.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "heimdall-agent.webhookSecret" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+type: Opaque
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "heimdall-agent.fullname" . }}
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+webhooks:
+  - name: previewenvironments.heimdall.dev
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+    matchPolicy: Equivalent
+    clientConfig:
+      service:
+        name: {{ include "heimdall-agent.webhookService" . }}
+        namespace: {{ .Release.Namespace }}
+        path: /validate-heimdall-dev-v1alpha1-previewenvironment
+        port: 443
+    rules:
+      - apiGroups: ["heimdall.dev"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["previewenvironments"]
+        scope: Namespaced
+    # Only this agent's PreviewEnvironments: another release's are another
+    # agent's business, and nothing else depends on this webhook.
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Release.Namespace }}

@@ -1,6 +1,7 @@
 {{- if .Values.admissionPolicy.enabled }}
 {{- $fullname := include "heimdall-agent.fullname" . }}
-{{- $prefix := .Values.previewNamespacePrefix }}
+{{- $prefix := include "heimdall-agent.previewPrefix" . }}
+{{- $agent := include "heimdall-agent.username" . }}
 {{- /*
 RBAC cannot say "only namespaces you created", so these policies do. They
 apply only to requests from the agent's service account and deny:
@@ -9,12 +10,14 @@ apply only to requests from the agent's service account and deny:
     turning an existing namespace into one by labelling it;
   - any RoleBinding outside preview namespaces, or one that binds anything but
     the preview-manager role.
+A third policy protects the agent's inputs and records from everyone else
+(<fullname>-environments, below).
 Reads do not pass through admission; read access is limited by RBAC alone.
 */}}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: {{ $fullname }}-namespaces
+  name: {{ include "heimdall-agent.namespacePolicy" . }}
   labels:
     {{- include "heimdall-agent.labels" . | nindent 4 }}
 spec:
@@ -27,7 +30,7 @@ spec:
         resources: ["namespaces"]
   matchConditions:
     - name: is-heimdall-agent
-      expression: {{ printf "request.userInfo.username == %s" (include "heimdall-agent.username" . | squote) | quote }}
+      expression: {{ printf "request.userInfo.username == %s" ($agent | squote) | quote }}
   variables:
     - name: prefix
       expression: {{ $prefix | squote | quote }}
@@ -46,11 +49,11 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: {{ $fullname }}-namespaces
+  name: {{ include "heimdall-agent.namespacePolicy" . }}
   labels:
     {{- include "heimdall-agent.labels" . | nindent 4 }}
 spec:
-  policyName: {{ $fullname }}-namespaces
+  policyName: {{ include "heimdall-agent.namespacePolicy" . }}
   validationActions: ["Deny"]
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -69,7 +72,7 @@ spec:
         resources: ["rolebindings"]
   matchConditions:
     - name: is-heimdall-agent
-      expression: {{ printf "request.userInfo.username == %s" (include "heimdall-agent.username" . | squote) | quote }}
+      expression: {{ printf "request.userInfo.username == %s" ($agent | squote) | quote }}
   variables:
     - name: prefix
       expression: {{ $prefix | squote | quote }}
@@ -93,5 +96,67 @@ metadata:
     {{- include "heimdall-agent.labels" . | nindent 4 }}
 spec:
   policyName: {{ $fullname }}-rolebindings
+  validationActions: ["Deny"]
+---
+{{- /*
+PreviewEnvironments in this namespace are the agent's inputs and records, so
+for everyone but the agent (and the cluster's own controllers, which must be
+able to delete them with the namespace):
+  - status is read-only: it records what was deployed (deployedGeneration,
+    completedResetNonce), and a forged record would make the agent skip work;
+  - with a source other than the cluster, the objects are generated from that
+    source and only metadata other than heimdall.dev/source may change:
+    change the desired state there instead.
+*/}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $fullname }}-environments
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Release.Namespace }}
+    resourceRules:
+      - apiGroups: ["heimdall.dev"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["previewenvironments", "previewenvironments/status"]
+  matchConditions:
+    - name: not-heimdall-agent
+      expression: {{ printf "request.userInfo.username != %s" ($agent | squote) | quote }}
+    - name: not-a-cluster-controller
+      expression: >-
+        request.userInfo.username != 'system:kube-controller-manager' &&
+        !request.userInfo.username.startsWith('system:serviceaccount:kube-system:')
+  variables:
+    # subResource is absent, not empty, on requests for the object itself.
+    - name: isStatus
+      expression: "has(request.subResource) && request.subResource == 'status'"
+  validations:
+    - expression: "!variables.isStatus"
+      message: "PreviewEnvironment status is written by the Heimdall agent alone"
+      reason: Forbidden
+    {{- if ne .Values.source.type "cluster" }}
+    - expression: >-
+        variables.isStatus ||
+        (request.operation == 'UPDATE' && object.spec == oldObject.spec &&
+          (has(object.metadata.labels) && 'heimdall.dev/source' in object.metadata.labels ? object.metadata.labels['heimdall.dev/source'] : '') ==
+          (has(oldObject.metadata.labels) && 'heimdall.dev/source' in oldObject.metadata.labels ? oldObject.metadata.labels['heimdall.dev/source'] : ''))
+      message: "PreviewEnvironments here are generated from the {{ .Values.source.type }} desired state ({{ .Values.source.configMap }}); change that instead"
+      reason: Forbidden
+    {{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $fullname }}-environments
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $fullname }}-environments
   validationActions: ["Deny"]
 {{- end }}

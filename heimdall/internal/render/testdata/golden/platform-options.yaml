@@ -752,7 +752,7 @@ spec:
 apiVersion: v1
 data:
   seed.sql: |
-    INSERT INTO widgets (name) VALUES ('seeded');
+    SELECT current_database();
 immutable: true
 kind: ConfigMap
 metadata:
@@ -818,14 +818,22 @@ spec:
       - command:
         - sh
         - -c
-        - until pg_isready --quiet --dbname="$DATABASE_URL"; do sleep 1; done; exec
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction -f /seed/seed.sql
+        - test "$HEIMDALL_NAMESPACE" = 'heimdall-pr184-shopflow-x7d2' || exit 64;
+          case "$HEIMDALL_NAMESPACE" in heimdall-*) ;; *) exit 64;; esac; case "$DATABASE_URL"
+          in postgres://app:*@postgres:5432/app_baseline\?sslmode=disable) ;; *) exit
+          64;; esac; until pg_isready --quiet --dbname="$DATABASE_URL"; do sleep 1;
+          done; exec psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction
+          -f /seed/seed.sql
         env:
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
               key: database-url-baseline
               name: heimdall-credentials
+        - name: HEIMDALL_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         image: mirror.acme.dev/hub/library/postgres:16.15-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
         imagePullPolicy: IfNotPresent
         name: psql

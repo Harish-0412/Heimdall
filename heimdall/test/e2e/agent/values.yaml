@@ -1,0 +1,15 @@
+# heimdall-agent values for the P3 end-to-end test (run.sh adds the image).
+# Two replicas so that killing the leader exercises failover; short sweeper
+# and backoff intervals so the test finishes in minutes.
+replicaCount: 2
+logLevel: debug
+platform:
+  baseDomain: preview.test
+  urlScheme: http
+operations:
+  stepTimeout: 6m
+  resyncInterval: 20s
+  maxBackoff: 20s
+sweeper:
+  interval: 10s
+  gracePeriod: 90s

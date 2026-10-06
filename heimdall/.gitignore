@@ -13,3 +13,4 @@ coverage.*
 *.kubeconfig
 .terraform/
 *.tfstate*
+.heimdall/

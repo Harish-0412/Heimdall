@@ -1,0 +1,48 @@
+{
+  "namespace": "heimdall-pr409-shopflow-3e82",
+  "generation": 1,
+  "diagnoses": [
+    {
+      "code": "NO_CAPACITY",
+      "severity": "error",
+      "title": "No capacity to schedule",
+      "summary": "rabbitmq cannot be scheduled: no node matches the preview node pool",
+      "subject": "deployment/rabbitmq",
+      "workload": "rabbitmq",
+      "stage": "dependencies",
+      "suggestion": "The platform pins previews to a node pool (platform.nodeSelector/tolerations) that has no matching, untainted node. A platform administrator should check the pool.",
+      "evidence": [
+        "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.",
+        "FailedScheduling: 0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling."
+      ]
+    },
+    {
+      "code": "NO_CAPACITY",
+      "severity": "error",
+      "title": "No capacity to schedule",
+      "summary": "redis cannot be scheduled: no node matches the preview node pool",
+      "subject": "deployment/redis",
+      "workload": "redis",
+      "stage": "dependencies",
+      "suggestion": "The platform pins previews to a node pool (platform.nodeSelector/tolerations) that has no matching, untainted node. A platform administrator should check the pool.",
+      "evidence": [
+        "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.",
+        "FailedScheduling: 0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling."
+      ]
+    },
+    {
+      "code": "NO_CAPACITY",
+      "severity": "error",
+      "title": "No capacity to schedule",
+      "summary": "postgres cannot be scheduled: no node matches the preview node pool",
+      "subject": "statefulset/postgres",
+      "workload": "postgres",
+      "stage": "dependencies",
+      "suggestion": "The platform pins previews to a node pool (platform.nodeSelector/tolerations) that has no matching, untainted node. A platform administrator should check the pool.",
+      "evidence": [
+        "0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.",
+        "FailedScheduling: 0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector. preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling."
+      ]
+    }
+  ]
+}

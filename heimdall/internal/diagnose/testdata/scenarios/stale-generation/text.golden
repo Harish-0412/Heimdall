@@ -1,0 +1,4 @@
+STALE_GENERATION: Superseded by a newer generation (generation/1)
+  generation 1 is older than generation 2, which this preview already accepted
+
+  What to do: A newer push superseded this one; its results were discarded on purpose. Nothing to fix: look at the newest generation.

@@ -26,6 +26,14 @@ Usage:
 Commands:
   validate [file]   Check a heimdall.yaml (default: ./heimdall.yaml)
   render [file]     Print the Kubernetes objects for a preview, stage by stage
+  manifest [file]   Print a PreviewEnvironment for the in-cluster agent
+  up [file]         Apply a preview using a trusted kube-context
+  down              Delete the preview recorded in --state
+  reset             Restore the current baseline with --nonce
+  status            Read live deployment status
+  logs              Read scoped, redacted pod logs
+  diagnose          Explain why a preview failed and what to do
+  force-cleanup     Administrator break-glass cleanup with evidence
   schema            Print the JSON Schema for heimdall.yaml (editor support)
   version           Print version information
   help              Show this help
@@ -41,10 +49,16 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return ExitUsage
 	}
 	switch args[0] {
+	case "up", "down", "reset", "status", "logs", "force-cleanup":
+		return runEngine(args[0], args[1:], stdout, stderr)
 	case "validate":
 		return runValidate(args[1:], stdout, stderr)
 	case "render":
 		return runRender(args[1:], stdout, stderr)
+	case "manifest":
+		return runManifest(args[1:], stdout, stderr)
+	case "diagnose":
+		return runDiagnose(args[1:], stdout, stderr)
 	case "schema":
 		return runSchema(args[1:], stdout, stderr)
 	case "version", "--version", "-v":

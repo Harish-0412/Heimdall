@@ -1,0 +1,7 @@
+OUT_OF_MEMORY: Out of memory (deployment/notifications, stage application)
+  notifications was killed for exceeding its 128Mi memory limit (2 restarts)
+
+  What to do: Raise `resources.memory` for notifications in heimdall.yaml, or find what makes it use more memory than in production (a cache without a bound, loading a whole table).
+
+  Evidence:
+    | container notifications: OOMKilled, exit code 137

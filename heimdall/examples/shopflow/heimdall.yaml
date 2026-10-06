@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schema/heimdall.schema.json
 # Example: the ShopFlow e-commerce stack from the Heimdall product brief.
 # Storefront + Node.js API + PostgreSQL + Redis + RabbitMQ + email worker.
-# The app itself lives next to this file (web/, api/, fixtures/) and is what
+# The app itself lives next to this file (web/, api/) and is what
 # the kind end-to-end test deploys (test/e2e/kind/run.sh).
 version: 1
 
@@ -26,8 +26,6 @@ services:
     env:
       NODE_ENV: production
       LOG_LEVEL: debug
-    secrets:
-      - STRIPE_TEST_KEY
     resources:
       cpu: 500m
       memory: 512Mi
@@ -44,7 +42,6 @@ dependencies:
   postgres:
     version: "16"
     storage: 2Gi
-    seed: fixtures/dev.sql
   redis: {}
   rabbitmq: {}
 

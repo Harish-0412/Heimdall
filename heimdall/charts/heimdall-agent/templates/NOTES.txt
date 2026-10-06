@@ -1,21 +1,34 @@
 The Heimdall agent is installed in namespace {{ .Release.Namespace }}.
 
-It manages preview namespaces named {{ .Values.previewNamespacePrefix }}* and
-labelled heimdall.dev/preview=true, and nothing else.
+It manages preview namespaces named {{ include "heimdall-agent.previewPrefix" . }}* and labelled
+heimdall.dev/preview=true, and nothing else.
 {{- if not .Values.admissionPolicy.enabled }}
 
 WARNING: admissionPolicy.enabled=false. Without the admission policies the
-agent can create RoleBindings in any namespace. Enable them unless your
-cluster runs Kubernetes older than 1.30.
+agent can create RoleBindings in any namespace, and does not wait for any
+policy before acting. Enable them unless your cluster runs Kubernetes older
+than 1.30.
 {{- end }}
-{{- if not .Values.controlPlane.url }}
+{{- if .Values.sweeper.dryRun }}
 
-The agent has no control plane configured (controlPlane.url). It will start
-but receive no work until one is set.
+The sweeper runs in dry-run mode: it reports orphaned preview namespaces
+(heimdall_agent_sweeper_orphans_total) but deletes nothing.
 {{- end }}
 
 Check it:
   kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "heimdall-agent.fullname" . }}
+{{- if eq .Values.source.type "cluster" }}
+
+Create a preview environment (docs/agent.md has a complete example):
+  kubectl -n {{ .Release.Namespace }} apply -f preview.yaml
+  kubectl -n {{ .Release.Namespace }} get previewenvironments -w
+{{- else }}
+
+Desired state is read from ConfigMap {{ .Values.source.configMap }} (key {{ .Values.source.key }}) every
+{{ .Values.source.syncInterval }}; the agent writes the PreviewEnvironments itself:
+  kubectl -n {{ .Release.Namespace }} get previewenvironments -w
+{{- end }}
 
 Review exactly what it may do:
   kubectl describe clusterrole {{ include "heimdall-agent.fullname" . }} {{ include "heimdall-agent.previewManager" . }}
+  kubectl -n {{ .Release.Namespace }} describe role {{ include "heimdall-agent.fullname" . }}

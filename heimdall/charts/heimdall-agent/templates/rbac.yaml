@@ -1,34 +1,55 @@
 {{- /*
-Two tiers of permissions (documented in README.md):
+Three scopes of permissions (README.md lists every rule and why):
 
 1. <fullname> (ClusterRole, bound cluster-wide): only what cannot be scoped
    to one namespace - creating preview namespaces, binding tier 2 inside
-   them, and (optionally) watching workload kinds. Writes are confined to
-   preview namespaces by admission-policy.yaml.
+   them, the agent's own webhook configuration, and the reviews its metrics
+   endpoint uses to authenticate scrapers. Namespace and RoleBinding writes
+   are confined to previews by admission-policy.yaml.
 2. <fullname>-preview-manager (ClusterRole, never bound cluster-wide): full
    management of preview resources. The agent binds it with a RoleBinding in
    each preview namespace it creates, which the "bind" verb below allows
    without the agent holding these rights anywhere else.
+3. <fullname> (Role, in the release namespace): PreviewEnvironments, the
+   desired-state and data ConfigMaps, its webhook certificate Secret (only
+   that one), leader election and events.
 */ -}}
+{{- $fullname := include "heimdall-agent.fullname" . }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "heimdall-agent.fullname" . }}
+  name: {{ $fullname }}
   labels:
     {{- include "heimdall-agent.labels" . | nindent 4 }}
 rules:
-  # Create and delete preview namespaces.
+  # Create and delete preview namespaces; the sweeper lists them.
   - apiGroups: [""]
     resources: ["namespaces"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # Grant itself the preview-manager role inside a preview namespace.
+  # Grant itself the preview-manager role inside a preview namespace. Never
+  # changed or deleted: a mismatched binding is reported, and the binding
+  # goes away with its namespace.
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["rolebindings"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    verbs: ["get", "create"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["clusterroles"]
     verbs: ["bind"]
     resourceNames: [{{ include "heimdall-agent.previewManager" . | quote }}]
+  # Inject its CA into its own webhook configuration, and nothing else's.
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingwebhookconfigurations"]
+    verbs: ["get", "update"]
+    resourceNames: [{{ $fullname | quote }}]
+  {{- if .Values.metrics.secure }}
+  # Authenticate and authorize metrics scrapers.
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+  {{- end }}
   {{- if .Values.rbac.clusterWideRead }}
   # Watch preview workloads with one informer per kind. No secrets, config
   # maps or logs: those are readable only inside preview namespaces.
@@ -52,13 +73,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "heimdall-agent.fullname" . }}
+  name: {{ $fullname }}
   labels:
     {{- include "heimdall-agent.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "heimdall-agent.fullname" . }}
+  name: {{ $fullname }}
 subjects:
   - kind: ServiceAccount
     name: {{ include "heimdall-agent.serviceAccountName" . }}
@@ -71,7 +92,8 @@ metadata:
   labels:
     {{- include "heimdall-agent.labels" . | nindent 4 }}
 rules:
-  # Everything a rendered preview contains (internal/render).
+  # Everything a rendered preview contains (internal/render), plus the
+  # engine's operation journal (a ConfigMap).
   - apiGroups: [""]
     resources: ["services", "configmaps", "secrets", "serviceaccounts", "persistentvolumeclaims", "resourcequotas", "limitranges"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -87,12 +109,20 @@ rules:
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["httproutes"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # Status and diagnostics: read pods and logs, record events.
+  # Status and diagnostics: read pods and logs (and delete pods a failed
+  # rollout leaves behind), record events.
   - apiGroups: [""]
-    resources: ["pods", "pods/log"]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  # Diagnostics: which services have ready endpoints.
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["events"]
@@ -101,15 +131,34 @@ rules:
     resources: ["events"]
     verbs: ["create", "patch"]
 ---
-# The agent's own namespace: leader election and its own events.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "heimdall-agent.fullname" . }}
+  name: {{ $fullname }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "heimdall-agent.labels" . | nindent 4 }}
 rules:
+  # The desired state (cluster source), or the agent's copy of it.
+  - apiGroups: ["heimdall.dev"]
+    resources: ["previewenvironments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["heimdall.dev"]
+    resources: ["previewenvironments/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["heimdall.dev"]
+    resources: ["previewenvironments/finalizers"]
+    verbs: ["update"]
+  # The desired-state document (configmap source) and approved data imports
+  # (spec.data). Read directly, never cached or listed.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+  # Its webhook certificate, and no other Secret.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "update"]
+    resourceNames: [{{ include "heimdall-agent.webhookSecret" . | quote }}]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
@@ -120,15 +169,58 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "heimdall-agent.fullname" . }}
+  name: {{ $fullname }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "heimdall-agent.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ include "heimdall-agent.fullname" . }}
+  name: {{ $fullname }}
 subjects:
   - kind: ServiceAccount
     name: {{ include "heimdall-agent.serviceAccountName" . }}
     namespace: {{ .Release.Namespace }}
+{{- if .Values.metrics.secure }}
+---
+# Bind to whatever scrapes metrics (for example Prometheus' service account).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-metrics-reader
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+rules:
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+{{- end }}
+{{- if .Values.rbac.aggregateToDefaultRoles }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-environments-view
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+  - apiGroups: ["heimdall.dev"]
+    resources: ["previewenvironments", "previewenvironments/status"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-environments-edit
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+rules:
+  # Spec only: status is written by the agent alone (admission-policy.yaml).
+  - apiGroups: ["heimdall.dev"]
+    resources: ["previewenvironments"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection"]
+{{- end }}

@@ -45,6 +45,13 @@ func fitLabel(head, flex, tail string) string {
 	return head + "-" + flex + "-" + tail
 }
 
+// NamespaceFor returns the namespace Render gives an environment. The agent's
+// sweeper uses it to work out which preview namespaces an authoritative
+// desired state accounts for, without rendering every environment.
+func NamespaceFor(repo string, pr int, suffix string) string {
+	return namespaceName(pr, repo, suffix)
+}
+
 // namespaceName is unique per environment (the suffix is) and readable:
 // heimdall-pr184-shopflow-x7d2.
 func namespaceName(pr int, repo, suffix string) string {

@@ -1,0 +1,16 @@
+# Only cmd/, internal/ and go.mod/go.sum are needed to build the agent image.
+.git
+.github
+.heimdall
+bin
+out
+web
+docs
+charts
+examples
+test
+schema
+**/node_modules
+**/test-results
+*.md
+*.exe

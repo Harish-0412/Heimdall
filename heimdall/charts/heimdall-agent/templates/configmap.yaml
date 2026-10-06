@@ -1,0 +1,28 @@
+{{- /*
+The agent's configuration file (internal/agent.Config). The agent decodes it
+strictly and refuses to start on any unknown field or invalid value, listing
+every problem; `heimdall-agent --config` documents nothing else.
+*/ -}}
+{{- $source := dict "type" .Values.source.type "syncInterval" .Values.source.syncInterval }}
+{{- if eq .Values.source.type "configmap" }}
+{{- $_ := set $source "configMap" (required "source.configMap is required for source.type=configmap" .Values.source.configMap) }}
+{{- $_ := set $source "key" .Values.source.key }}
+{{- end }}
+{{- $_ := required "platform.baseDomain is required: the DNS zone covered by the cluster's wildcard certificate" .Values.platform.baseDomain }}
+{{- $config := dict
+  "source" $source
+  "platform" .Values.platform
+  "policy" .Values.policy
+  "operations" .Values.operations
+  "sweeper" .Values.sweeper
+  "admission" (dict "requirePolicy" .Values.admissionPolicy.enabled) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "heimdall-agent.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "heimdall-agent.labels" . | nindent 4 }}
+data:
+  agent.yaml: |
+    {{- toYaml $config | nindent 4 }}

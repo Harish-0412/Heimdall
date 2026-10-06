@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "capturedAt": "0001-01-01T00:00:00Z",
+  "namespace": "heimdall-pr412-shopflow-f95d",
+  "generation": 1,
+  "failure": {
+    "code": "engine.data_digest",
+    "message": "approved digest does not match the imported data"
+  },
+  "notes": [
+    "the preview could not be inspected: preview namespace heimdall-pr412-shopflow-f95d: namespaces \"heimdall-pr412-shopflow-f95d\" not found"
+  ]
+}

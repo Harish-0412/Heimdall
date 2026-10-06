@@ -23,8 +23,15 @@ jobs:
           go-version-file: go.mod
       - run: go mod verify
       - run: go vet ./...
+      # A real API server and etcd for the controller, CRD validation and
+      # syncer suites (envtest); they would otherwise skip.
+      - name: envtest binaries
+        run: |
+          assets=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.25.2 use 1.37.0 --bin-dir "$RUNNER_TEMP/envtest" -p path)
+          test -n "$assets"
+          echo "KUBEBUILDER_ASSETS=$assets" >> "$GITHUB_ENV"
       # Includes golden files, the security-defaults test, the property test,
-      # fuzz seed corpora, and the schema drift check.
+      # fuzz seed corpora, the schema drift check and the envtest suites.
       - run: go test -race -coverprofile=coverage.out ./...
       - name: Validate example configs
         run: go run ./cmd/heimdall validate --strict examples/shopflow/heimdall.yaml
@@ -32,7 +39,9 @@ jobs:
         run: |
           go test ./internal/config -run Schema -update
           go test ./internal/render -run Golden -update
-          git diff --exit-code -- schema internal/render/testdata
+          make diagnostics-golden
+          make generate
+          git diff --exit-code -- schema internal/render/testdata internal/diagnose/testdata internal/api charts/heimdall-agent/crds
 
   lint:
     runs-on: ubuntu-latest
@@ -58,6 +67,15 @@ jobs:
       - run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0
       - run: make helm-lint kubeconform
 
+  # The agent image builds for both architectures (no push).
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - run: docker buildx build --platform linux/amd64,linux/arm64 -f build/agent/Dockerfile .
+
   fuzz:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -81,3 +99,42 @@ jobs:
       - uses: azure/setup-helm@v4
       - run: go install sigs.k8s.io/kind@v0.33.0
       - run: make e2e-kind
+
+  e2e-engine:
+    needs: [test, manifests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go install sigs.k8s.io/kind@v0.33.0
+      - run: make e2e-engine
+
+  # Phase 3 exit criteria: the agent on kind, including agent kills and the sweeper.
+  e2e-agent:
+    needs: [test, manifests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@v4
+      - run: go install sigs.k8s.io/kind@v0.33.0
+      - run: make e2e-agent
+
+  # Phase 4 exit criteria: each way of breaking a preview yields its diagnosis.
+  e2e-diagnose:
+    needs: [test, manifests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go install sigs.k8s.io/kind@v0.33.0
+      - run: make e2e-diagnose

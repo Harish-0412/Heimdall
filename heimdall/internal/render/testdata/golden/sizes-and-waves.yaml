@@ -770,6 +770,7 @@ metadata:
   name: jobs
   namespace: heimdall-pr184-shopflow-x7d2
 spec:
+  minReadySeconds: 10
   replicas: 3
   revisionHistoryLimit: 2
   selector:

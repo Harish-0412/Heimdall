@@ -1,0 +1,31 @@
+# Real ShopFlow processes with schema-only PostgreSQL. No generated seed data.
+version: 1
+services:
+  api:
+    build: {context: examples/shopflow/api}
+    port: 8080
+    health: {path: /health}
+    dependsOn: [postgres, redis, rabbitmq]
+  web:
+    build: {context: examples/shopflow/web}
+    port: 3000
+    health: {path: /}
+    dependsOn: [api]
+workers:
+  notifications:
+    build: {context: examples/shopflow/api}
+    command: npm run worker
+    dependsOn: [api, postgres, rabbitmq]
+dependencies:
+  postgres: {version: "16", storage: 1Gi}
+  redis: {}
+  rabbitmq: {}
+migrations:
+  service: api
+  command: npm run migrate
+smokeTests:
+  - name: api-health
+    command: curl --fail http://api:8080/health
+  - name: storefront
+    command: curl --fail http://web:3000/
+preview: {ttl: 48h, visibility: private}

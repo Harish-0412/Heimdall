@@ -45,7 +45,7 @@ workers:
     env / secrets / resources / dependsOn
 
 dependencies:                  # presence enables; use {} for defaults
-  postgres: {version: "16", storage: 1Gi, seed: fixtures/dev.sql}
+  postgres: {version: "16", storage: 1Gi} # schema-only; optional seed requires approved sanitised data
   redis: {version: "7"}
   rabbitmq: {version: "3.13"}
 

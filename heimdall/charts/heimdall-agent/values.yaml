@@ -1,5 +1,5 @@
-# Default values for heimdall-agent. See README.md for every permission the
-# chart grants and why.
+# Default values for heimdall-agent. README.md documents every permission the
+# chart grants, and docs/agent.md how the agent works.
 
 image:
   repository: ghcr.io/heimdall-dev/heimdall-agent
@@ -12,41 +12,96 @@ image:
 
 imagePullSecrets: []
 
-# The agent runs a single active replica. Leader election arrives with the
-# controller (phase 3); until then keep this at 1.
+# Replicas elect a leader; one reconciles at a time and all serve the
+# admission webhook. 2 gives fast failover.
 replicaCount: 1
-
-# Name of this cluster as shown in the Heimdall dashboard.
-clusterName: ""
-
-controlPlane:
-  # Heimdall API the agent connects out to (outbound only, ADR 0004).
-  url: ""
-  # Existing Secret holding this cluster's credential under the key "token".
-  # Create it out of band; the chart never contains credentials.
-  credentialsSecret: ""
-
-# Prefix of preview namespace names. Must match the agent's naming
-# (internal/render.NamespacePrefix); the admission policy enforces it.
-previewNamespacePrefix: heimdall-
 
 # debug | info | warn | error
 logLevel: info
 
+# Where desired state comes from (ADR 0010).
+#   cluster:   PreviewEnvironment objects in this namespace are the desired
+#              state; operators kubectl-apply them.
+#   configmap: a DesiredState document in a ConfigMap in this namespace; the
+#              agent writes the PreviewEnvironment objects, and only the agent
+#              may (admission policy). Until P5, when the control plane's API
+#              becomes the source.
+source:
+  type: cluster
+  configMap: heimdall-desired-state
+  key: desired-state.yaml
+  syncInterval: 30s
+
+# The cluster, as previews see it (docs/rendering.md, "Platform settings").
+platform:
+  # Required: the DNS zone covered by the cluster's wildcard certificate.
+  baseDomain: ""
+  urlScheme: https
+  urlPort: 0
+  # The shared Gateway preview routes attach to (ADR 0008).
+  gateway:
+    namespace: heimdall-gateway
+    name: heimdall
+    sectionName: ""
+  # NetworkPolicyPeers that may reach public services; default: the
+  # Gateway's namespace. Use an ipBlock for data planes outside the cluster.
+  ingressPeers: []
+  # Where previews resolve names; default: kube-dns in kube-system.
+  dnsPeers: []
+  # Destinations outside the cluster previews may reach (default none).
+  egressCIDRs: []
+  storageClassName: ""
+  # Pin previews to a dedicated, tainted node pool (P7).
+  nodeSelector: {}
+  tolerations: []
+  runtimeClassName: ""
+  imageMirror: ""
+  writableRootFilesystem: false
+
+# Tenant policy (ADR 0006) until the control plane delivers it (P5).
+# Omitted limits take the platform defaults (docs/config-reference.md).
+policy:
+  maxVisibility: private
+  allowLargeSize: false
+  # [] allows no secrets; delete the key to allow any.
+  allowedSecrets: []
+  # Registries prebuilt images may come from; omit to allow any.
+  # allowedRegistries: ["ghcr.io/your-org/"]
+
+operations:
+  maxConcurrent: 4
+  stepTimeout: 10m
+  resyncInterval: 5m
+  maxBackoff: 10m
+
+# Orphan removal (ADR 0005): ownership verified, older than gracePeriod,
+# confirmed by a second pass, and only after an authoritative read.
+sweeper:
+  enabled: true
+  dryRun: false
+  interval: 5m
+  gracePeriod: 30m
+
 rbac:
-  # Grant cluster-wide get/list/watch on the workload kinds the agent manages,
-  # so it can watch every preview namespace with one informer per kind.
-  # Secrets, ConfigMaps and pod logs are never readable cluster-wide: those
-  # rights exist only inside preview namespaces. Set to false to confine all
-  # access to preview namespaces (the agent then watches namespace by
-  # namespace).
-  clusterWideRead: true
+  # Cluster-wide get/list/watch on preview workload kinds. The P3 agent reads
+  # inside preview namespaces through its per-namespace role, so it does not
+  # need this. Secrets, ConfigMaps and logs are never readable cluster-wide.
+  clusterWideRead: false
+  # Let the built-in view/edit/admin roles read (view) and write (edit,
+  # admin) PreviewEnvironments, in namespaces where they are bound. Only this
+  # release's namespace holds PreviewEnvironments the agent acts on.
+  aggregateToDefaultRoles: true
 
 admissionPolicy:
-  # Confine the agent's namespace and RoleBinding writes to preview
-  # namespaces with ValidatingAdmissionPolicies. Strongly recommended: without
-  # it the agent could create RoleBindings in any namespace.
+  # Confine the agent's writes with ValidatingAdmissionPolicies (Kubernetes
+  # 1.30+). The agent refuses to act until it observes them enforced.
   enabled: true
+
+webhook:
+  port: 9443
+  # Fail closed: an unvalidated PreviewEnvironment is never admitted.
+  failurePolicy: Fail
+  timeoutSeconds: 10
 
 serviceAccount:
   create: true
@@ -72,15 +127,17 @@ affinity: {}
 priorityClassName: ""
 
 metrics:
-  port: 8080
+  port: 8443
+  # HTTPS with Kubernetes authentication and authorization: scrapers need a
+  # token whose identity may "get" /metrics (the metrics-reader ClusterRole).
+  secure: true
 
 probes:
   port: 8081
 
 networkPolicy:
-  # Allow ingress only to the metrics port. The agent needs no other inbound
-  # traffic; its egress (API server, control plane, registries) is open.
+  # Allow ingress only to the webhook and metrics ports.
   enabled: true
-  # Peers allowed to scrape metrics (NetworkPolicyPeer list). Empty allows
+  # Peers allowed to scrape metrics (NetworkPolicyPeer list); empty allows
   # any source.
   metricsFrom: []

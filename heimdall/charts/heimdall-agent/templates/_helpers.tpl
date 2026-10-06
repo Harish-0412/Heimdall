@@ -45,6 +45,27 @@ app.kubernetes.io/part-of: heimdall
 {{- printf "%s-preview-manager" (include "heimdall-agent.fullname" .) }}
 {{- end }}
 
+{{/*
+Preview namespace names start with this (internal/render.NamespacePrefix).
+Fixed: the admission policies must match exactly what the agent creates.
+*/}}
+{{- define "heimdall-agent.previewPrefix" -}}
+heimdall-
+{{- end }}
+
+{{/* Names the agent is told about with flags. */}}
+{{- define "heimdall-agent.webhookService" -}}
+{{- printf "%s-webhook" (include "heimdall-agent.fullname" .) }}
+{{- end }}
+
+{{- define "heimdall-agent.webhookSecret" -}}
+{{- printf "%s-webhook-tls" (include "heimdall-agent.fullname" .) }}
+{{- end }}
+
+{{- define "heimdall-agent.namespacePolicy" -}}
+{{- printf "%s-namespaces" (include "heimdall-agent.fullname" .) }}
+{{- end }}
+
 {{- define "heimdall-agent.image" -}}
 {{- if .Values.image.digest }}
 {{- printf "%s@%s" .Values.image.repository .Values.image.digest }}

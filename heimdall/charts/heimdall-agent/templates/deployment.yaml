@@ -7,9 +7,14 @@ metadata:
     {{- include "heimdall-agent.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
-  # One agent at a time: never run old and new side by side during upgrades.
+  # Replicas elect a leader, so old and new pods may overlap: only the leader
+  # reconciles. Surging keeps the admission webhook (which fails closed)
+  # served throughout an upgrade.
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   revisionHistoryLimit: 3
   selector:
     matchLabels:
@@ -21,15 +26,19 @@ spec:
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.podAnnotations }}
       annotations:
+        # Restart on configuration changes: the agent reads its file once.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "heimdall-agent.serviceAccountName" . }}
       # The agent talks to the Kubernetes API, so it does need its token.
       automountServiceAccountToken: true
       enableServiceLinks: false
+      # Long enough to cancel running operations and release the leader lease.
+      terminationGracePeriodSeconds: 30
       {{- with .Values.priorityClassName }}
       priorityClassName: {{ . }}
       {{- end }}
@@ -48,48 +57,48 @@ spec:
           image: {{ include "heimdall-agent.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
+            - --config=/etc/heimdall/agent.yaml
             - --metrics-bind-address=:{{ .Values.metrics.port }}
+            - --metrics-secure={{ .Values.metrics.secure }}
             - --health-probe-bind-address=:{{ .Values.probes.port }}
+            - --webhook-port={{ .Values.webhook.port }}
+            - --leader-elect=true
+            - --service-account={{ include "heimdall-agent.serviceAccountName" . }}
+            - --preview-manager-role={{ include "heimdall-agent.previewManager" . }}
+            - --namespace-policy={{ include "heimdall-agent.namespacePolicy" . }}
+            - --webhook-service={{ include "heimdall-agent.webhookService" . }}
+            - --webhook-configuration={{ include "heimdall-agent.fullname" . }}
+            - --webhook-secret={{ include "heimdall-agent.webhookSecret" . }}
             - --log-level={{ .Values.logLevel }}
           env:
-            - name: HEIMDALL_CLUSTER_NAME
-              value: {{ .Values.clusterName | quote }}
-            - name: HEIMDALL_CONTROL_PLANE_URL
-              value: {{ .Values.controlPlane.url | quote }}
-            - name: HEIMDALL_PREVIEW_NAMESPACE_PREFIX
-              value: {{ .Values.previewNamespacePrefix | quote }}
-            - name: HEIMDALL_PREVIEW_MANAGER_ROLE
-              value: {{ include "heimdall-agent.previewManager" . | quote }}
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            {{- with .Values.controlPlane.credentialsSecret }}
-            - name: HEIMDALL_CONTROL_PLANE_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ . }}
-                  key: token
-            {{- end }}
           ports:
+            - name: webhook
+              containerPort: {{ .Values.webhook.port }}
+              protocol: TCP
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
               protocol: TCP
             - name: probes
               containerPort: {{ .Values.probes.port }}
               protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: probes
-            initialDelaySeconds: 10
-            periodSeconds: 20
+          # Ready only once the webhook certificate is trusted and (unless
+          # disabled) the admission policies are observably enforced.
           readinessProbe:
             httpGet:
               path: /readyz
               port: probes
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probes
+            initialDelaySeconds: 15
+            periodSeconds: 20
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
@@ -101,9 +110,15 @@ spec:
               drop: ["ALL"]
           terminationMessagePolicy: FallbackToLogsOnError
           volumeMounts:
+            - name: config
+              mountPath: /etc/heimdall
+              readOnly: true
             - name: tmp
               mountPath: /tmp
       volumes:
+        - name: config
+          configMap:
+            name: {{ include "heimdall-agent.fullname" . }}
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
@@ -114,6 +129,15 @@ spec:
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if gt (int .Values.replicaCount) 1 }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "heimdall-agent.selectorLabels" . | nindent 14 }}
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
